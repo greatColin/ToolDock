@@ -497,7 +497,17 @@ function createCard(entry, win) {
   rzB.className = "rz rz-b";
   const rzBR = document.createElement("div");
   rzBR.className = "rz rz-br";
-  card.append(iframe, mask, rzR, rzB, rzBR);
+  const chip = document.createElement("div");
+  chip.className = "ctrl-chip";
+  chip.innerHTML = `<span class="dot"></span><span class="chip-st"></span><button class="chip-btn" type="button"></button>`;
+  // 浏览态 hover 浮现 / 非 RUNNING 常驻；编辑态常驻可点（z 高于遮罩）
+  chip.addEventListener("click", e => {
+    e.stopPropagation();
+    const n = card.dataset.name, st = states[n] ?? "STOPPED";
+    if (st === "STARTING") return;
+    postModule(n, st === "RUNNING" ? "stop" : "start");
+  });
+  card.append(iframe, chip, mask, rzR, rzB, rzBR);
 
   bindCardDrag(mask, card, win);
   bindResize(rzR, card, win, "x");
@@ -512,9 +522,22 @@ function createCard(entry, win) {
   return card;
 }
 
+/* 控制芯片：状态点 + 状态文字 + 互斥操作按钮（同模块多卡经 updateStateUI→applyCardState 同步） */
+function updateChip(card, name, st) {
+  const chip = card.querySelector(".ctrl-chip");
+  chip.querySelector(".dot").className = dotCls(st);
+  chip.querySelector(".chip-st").textContent =
+    st === "RUNNING" ? "运行中" : st === "STARTING" ? "启动中" : st === "ERROR" ? "已出错" : "已停止";
+  const btn = chip.querySelector(".chip-btn");
+  btn.textContent = st === "RUNNING" ? "关闭" : st === "STARTING" ? "启动中…" : st === "ERROR" ? "重试" : "启动";
+  btn.disabled = st === "STARTING";
+  chip.classList.toggle("always", st !== "RUNNING"); // 非 RUNNING 时浏览态也常驻
+}
+
 /* 仅 RUNNING 渲染 iframe；下线摘除不留死帧 */
 function applyCardState(card) {
   const name = card.dataset.name, st = states[name] ?? "STOPPED";
+  updateChip(card, name, st);
   const iframe = card.querySelector("iframe");
   if (st === "RUNNING") {
     if (!iframe.dataset.run) {

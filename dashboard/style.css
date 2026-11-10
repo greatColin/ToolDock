@@ -279,3 +279,28 @@ body.editing .icon { cursor: grab; }
 .lib-tag { flex: none; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 8px; }
 .lib-row.used .lib-tag { background: rgba(59, 130, 246, .12); color: #1d4ed8; }
 .lib-row.unused .lib-tag { background: rgba(16, 185, 129, .16); color: #047857; font-weight: 600; }
+
+/* ---- 卡片控制芯片：右上角白毛玻璃小胶囊（状态点+文字+互斥按钮） ---- */
+.ctrl-chip {
+  position: absolute; top: 6px; right: 6px; z-index: 4;
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px 3px 8px; border-radius: 12px;
+  background: rgba(255, 255, 255, .55);
+  backdrop-filter: blur(12px) saturate(1.4); -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, .65); box-shadow: 0 1px 4px rgba(15, 23, 42, .10);
+  font-size: 11px; line-height: 16px; color: #334155; user-select: none;
+  opacity: 0; pointer-events: none; transition: opacity .15s;
+}
+.ctrl-chip .dot { width: 8px; height: 8px; }
+.ctrl-chip .chip-btn {
+  border: 1px solid rgba(15, 23, 42, .12); background: rgba(255, 255, 255, .75);
+  border-radius: 8px; padding: 0 8px; font-size: 11px; line-height: 18px; color: #1e293b; cursor: pointer;
+}
+.ctrl-chip .chip-btn:hover { background: #fff; }
+.ctrl-chip .chip-btn:active { transform: scale(.95); }
+.ctrl-chip .chip-btn:disabled { opacity: .5; cursor: default; transform: none; }
+/* 浏览态：hover 浮现；非 RUNNING 常驻（always 由 updateChip 切换） */
+body:not(.editing) .card:hover .ctrl-chip { opacity: 1; pointer-events: auto; }
+body:not(.editing) .card .ctrl-chip.always { opacity: 1; pointer-events: auto; }
+/* 编辑态：常驻并且可点击，置于全卡遮罩（z=2）之上 */
+body.editing .card .ctrl-chip { opacity: 1; pointer-events: auto; }

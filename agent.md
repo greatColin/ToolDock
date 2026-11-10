@@ -10,8 +10,10 @@ run_module.py      # python run_module.py <名字> [--port 9900]：单模块独�
 main.py            # 宿主：发现 plugins/<名字>/module.py → 按 /<名字>/ 挂载 → 同端口仪表盘 /；html/css/js 一律 Cache-Control: no-cache
 core/registry.py   # 注册表：发现/去重/状态机/config 生命周期
 plugins/<名字>/    # 一个模块一个目录，挂载前缀 = 目录名
-config.json        # 自动生成，勿手编："tabs": {标签: [{"id","name","span","col","row"}]}；条目=摆放（摆放 id 唯一，同一模块可多处引用共享实例与状态）；col/row=1 起的网格锚点，缺省 null 由前端 first-fit
+hub.db            # SQLite 模板库（自动生成，gitignore）：tabs(name, idx) + placements(id, tab_id, module, col, row, span_w, span_h)；每次布局编辑即整体落库，启动按当前模板初始化；首次启动如存在旧 config.json 自动迁移后删除，两者不可并存
 ```
+
+# 内存形态/前端契约不变：宿主 GET/PUT /api/config 的 tabs 形状保持 {标签: [{id,name,span,col,row}]}，SQLite 只是实现层。
 
 运行：`D:/python/envs/py310/python.exe main.py`（conda py310，fastapi/uvicorn 已装；base 环境已坏未用）。宿主端口 8500。
 
@@ -46,9 +48,10 @@ async def shutdown()   # 幂等，必须能清理半途 init 失败的残留
 
 - 主页面=桌面：标签页即 App，图标=首字母圆形徽章，双击开启窗口（多开、focus 置顶；**刷新/进入不自动开窗**）；"新建标签页"也是桌面图标；卸载 App=删除标签页（右键菜单打开/重命名/卸载），卸载先 confirm"将停止其下模块"再移除引用。编辑模式下桌面图标可拖动重排序，图标顺序=PUT 时 tabs key 顺序。
 - 窗口：标题栏左上三钮——红=关窗口（仅关窗不停模块）、黄=最大化/还原、绿=追加组件（点选组件库再添加一份，可重复）。窗口内容=网格视图。视觉为白色系（亮壁纸+白毛玻璃）。
-- 网格：24 列、单元 50×50px、gap 8px。布局=**自由网格**：每卡由锚点 col/row（1 起）+ span 定位，允许空隙；可视条目带 col/row 进 config.json。span 范围 4×4~24×16，默认 6×5。
+- 网格：24 列、单元 50×50px、gap 8px。布局=**自由网格**：每卡由锚点 col/row（1 起）+ span 定位，允许空隙；锚点随摆放持久化于 hub.db。span 范围 4×4~24×16，默认 6×5。
 - 双态布局交互：iOS 滑块开关（右上角，会话态）。编辑态：卡片盖全卡遮罩拦截 iframe，卡内任意处拖动=改锚点落格（重叠时最近可容位滑动，兜底叠放置顶），遮罩边缘缩放改 span（ghost 橙红预告覆盖）；组件库追加=first-fit 空锚点。浏览态：遮罩与手柄完全不渲染，iframe 可交互，拖拽/缩放禁用。右键菜单两态均可用。布局改动双向持久化。
-- 卡片右键菜单=统一控制层：启动/停止、移动到其他标签页、移出到组件库（移出/卸载即停止，宿主监督实现）。
+- 卡片控制条（每卡自动拥有，模块零工作量）：右上角白毛玻璃芯片=[状态点+状态文字]+互斥单按钮——STOPPED「启动」/ STARTING「启动中…」禁用 / RUNNING「关闭」 / ERROR「重试」；浏览态 hover 浮现，非 RUNNING 态常驻，编辑态显示于遮罩之上且可点。同名多份摆放实时同步状态。
+- 卡片右键菜单=辅助控制层：启动/停止、移动到其他标签页、移出到组件库（移出/卸载即停止，宿主监督实现）。
 - 组件库：列出全部已发现模块（含未引用的"未启用"高亮），入口=绿点/桌面；列表项含状态色点与启停操作；iframe 探测 `/<名字>/card` 优先否则 `/<名字>/`，iframe 填满、内容自滚动、禁 auto-height。
 - 仅 RUNNING 渲染 iframe，模块下线立即摘除不留死帧。用 iframe 而非 div 直挂（CSS/JS/错误隔离，卡片页与独立页同源）；改直挂须全文同步，禁止混用两种嵌入方式。
 - 静态资源（html/css/js）一律 `Cache-Control: no-cache`（宿主中间件实现）；历史上"改前端不生效"即浏览器启发式缓存量积所致，排查第一步=硬刷新。
