@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工具整合平台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="desktop" aria-label="桌面">
+  <div id="icons">
+    <button id="addIcon" class="icon fresh" title="新建标签页">
+      <span class="disc">＋</span><span class="label">新建标签页</span>
+    </button>
+  </div>
+</main>
+<button id="editSwitch" class="switch" role="switch" aria-checked="false" title="编辑模式：拖动排序与缩放（会话态不持久化）"><span class="knob"></span></button>
+<span id="editLabel" class="switch-label">编辑模式</span>
+<ul id="menu" hidden aria-label="上下文菜单"></ul>
+<aside id="library" hidden aria-label="组件库">
+  <div class="lib-head"><b>组件库</b><button id="libClose" title="关闭（Esc）">×</button></div>
+  <div id="libList"></div>
+</aside>
+<div id="dragMask" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

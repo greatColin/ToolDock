@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>温度卡片</title>
+<style>
+  body{font:13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;height:100vh;box-sizing:border-box;padding:10px;overflow:auto;background:transparent;color:#333}
+  #cv{width:100%;height:calc(100% - 18px);display:block}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="cur">…</div>
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), cur = document.getElementById('cur');
+function draw(points){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h }
+  ctx.clearRect(0, 0, w, h);
+  if (points.length < 2){ ctx.fillText('…', 4, 14); return }
+  let min = Math.min(...points), max = Math.max(...points);
+  if (max - min < 1){ min -= 0.5; max += 0.5 }
+  ctx.beginPath();
+  points.forEach((v, i) => {
+    const x = 4 + i * (w - 8) / (points.length - 1);
+    const y = 4 + (1 - (v - min) / (max - min)) * (h - 20);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.strokeStyle='#d88c6a';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+async function tick(){
+  const {points = []} = await (await fetch('current?n=20')).json();
+  const last = points[points.length - 1];
+  if (last != null) cur.textContent = last + '\u00b0C';
+  draw(points);
+}
+tick();
+setInterval(tick, 1000);
+/* 卡片右键转发宿主：以宿主视口坐标重新派发到 iframe 元素上 */
+document.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const f = window.frameElement;
+  if (!f) return;
+  const r = f.getBoundingClientRect();
+  f.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:r.left+e.clientX, clientY:r.top+e.clientY, button:2}));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>便签</title>
+<style>
+  body{font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:12px;height:100vh;box-sizing:border-box;overflow:auto;background:transparent}
+  .bar{display:flex;gap:6px;margin-bottom:10px}
+  input{flex:1;min-width:0;padding:6px 8px;border:1px solid #ccc;border-radius:6px}
+  button{padding:6px 12px;border:0;border-radius:6px;background:#3a7;color:#fff;cursor:pointer}
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid #eee}
+  li span{flex:1;min-width:0;word-break:break-all}
+  .del{background:#d55;padding:4px 10px}
+  .empty{color:#999;justify-content:center;border-bottom:0}
+</style>
+</head>
+<body>
+<div class="bar">
+  <input id="text" placeholder="写点什么…" onkeydown="if(event.key==='Enter')add()">
+  <button onclick="add()">新增</button>
+</div>
+<ul id="list"></ul>
+<script>
+const list = document.getElementById('list'), input = document.getElementById('text');
+async function refresh(){
+  const notes = await (await fetch('notes')).json();
+  list.textContent = '';
+  if (!notes.length){
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '暂无便签';
+    list.append(li);
+    return;
+  }
+  for (const n of notes){
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.textContent = n.text;
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '删除';
+    del.onclick = async () => { await fetch('notes/' + n.id, {method:'DELETE'}); refresh(); };
+    li.append(span, del);
+    list.append(li);
+  }
+}
+async function add(){
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  await fetch('notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+  refresh();
+}
+refresh();
+/* 卡片右键转发宿主：以宿主视口坐标重新派发到 iframe 元素上 */
+document.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const f = window.frameElement;
+  if (!f) return;
+  const r = f.getBoundingClientRect();
+  f.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:r.left+e.clientX, clientY:r.top+e.clientY, button:2}));
+});
+</script>
+</body>
+</html>

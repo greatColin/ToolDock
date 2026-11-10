@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>便签卡片</title>
+<style>
+  body{font:13px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:10px;height:100vh;box-sizing:border-box;overflow:auto;background:transparent;color:#333}
+  .num{font-size:34px;font-weight:600;line-height:1.2}
+  .cap{color:#888;font-size:12px}
+  .latest{margin-top:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+  .latest::before{content:'最新：';color:#888}
+</style>
+</head>
+<body>
+<div class="num"><span id="count">0</span> 条</div>
+<div class="cap">便签数量</div>
+<div class="latest" id="latest">-</div>
+<script>
+async function refresh(){
+  const notes = await (await fetch('notes')).json();
+  document.getElementById('count').textContent = notes.length;
+  document.getElementById('latest').textContent = notes.length ? notes[notes.length-1].text : '-';
+}
+refresh();
+setInterval(refresh, 2000);
+/* 卡片右键转发宿主：以宿主视口坐标重新派发到 iframe 元素上 */
+document.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const f = window.frameElement;
+  if (!f) return;
+  const r = f.getBoundingClientRect();
+  f.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:r.left+e.clientX, clientY:r.top+e.clientY, button:2}));
+});
+</script>
+</body>
+</html>

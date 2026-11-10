@@ -1,0 +1,281 @@
+/* 仪表盘 · Mac 风格桌面（白主题）。网格常量：cell 50px、gap 8px（step 58px），与 app.js 的 STEP 一致 */
+:root { --cell: 50px; --gap: 8px; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; user-select: none;
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  color: #1f2937;
+  background:
+    radial-gradient(1100px 760px at 12% -12%, rgba(96, 165, 250, .35), transparent 62%),
+    radial-gradient(880px 660px at 88% 108%, rgba(167, 139, 250, .28), transparent 58%),
+    radial-gradient(640px 480px at 68% 8%, rgba(52, 211, 153, .25), transparent 60%),
+    #eef2f9;
+}
+
+/* ---- 桌面图标 ---- */
+#desktop { height: 100%; overflow: auto; padding: 44px; }
+#icons { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 24px 18px; width: fit-content; }
+.icon {
+  width: 86px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  cursor: pointer; padding: 6px 2px; border-radius: 12px; border: 0; background: none;
+}
+.icon:hover { background: rgba(15, 23, 42, .06); }
+.icon:active .disc { transform: scale(.94); }
+.icon .disc {
+  width: 58px; height: 58px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; color: #fff;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .4), 0 6px 14px rgba(15, 23, 42, .18);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .15s;
+}
+.icon.fresh .disc {
+  color: #64748b; background: none;
+  border: 1.5px dashed #94a3b8;
+  box-shadow: none; font-weight: 400;
+}
+.icon.fresh:hover .disc { border-color: #475569; color: #334155; }
+.icon .label {
+  max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; color: #334155; text-shadow: 0 1px 1px rgba(255, 255, 255, .8);
+}
+
+/* ---- 编辑模式开关（iOS 滑块，桌面/窗口共用 --sw-* 变量） ---- */
+:root {
+  --sw-w: 48px; --sw-h: 28px; --sw-knob: 22px; --sw-gap: 3px;
+  --sw-track: #cbd5e1; --sw-track-hover: #b3bfcf;
+  --sw-track-on: #3b82f6; --sw-track-on-hover: #2563eb;
+  --sw-knob-bg: #fff;
+  --sw-knob-shadow: 0 2px 6px rgba(15, 23, 42, .35);
+  --sw-track-inset: inset 0 1px 3px rgba(15, 23, 42, .22);
+  --sw-speed: .22s cubic-bezier(.3, .9, .4, 1.2);
+}
+.switch {
+  position: relative; display: inline-block; flex: none;
+  width: var(--sw-w); height: var(--sw-h); border-radius: calc(var(--sw-h) / 2);
+  padding: 0; border: 0; background: var(--sw-track); cursor: pointer;
+  box-shadow: var(--sw-track-inset);
+  transition: background var(--sw-speed);
+}
+.switch:hover { background: var(--sw-track-hover); }
+.switch .knob {
+  position: absolute; top: var(--sw-gap); left: var(--sw-gap);
+  width: var(--sw-knob); height: var(--sw-knob); border-radius: 50%;
+  background: var(--sw-knob-bg);
+  box-shadow: var(--sw-knob-shadow);
+  transition: transform var(--sw-speed);
+}
+.switch.on { background: var(--sw-track-on); }
+.switch.on:hover { background: var(--sw-track-on-hover); }
+.switch.on .knob { transform: translateX(calc(var(--sw-w) - var(--sw-knob) - var(--sw-gap) * 2)); }
+#editSwitch { position: fixed; top: 16px; right: 16px; z-index: 1200; }
+.switch-label {
+  position: fixed; top: 21px; right: 72px; z-index: 1200;
+  font-size: 12px; font-weight: 600; color: #475569;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, .8);
+  pointer-events: none;
+}
+
+/* ---- 通用白毛玻璃面板（菜单 / 组件库） ---- */
+#menu, #library {
+  position: fixed; z-index: 2000; min-width: 148px; max-width: 240px;
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(15, 23, 42, .12); border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, .22), inset 0 1px 0 rgba(255, 255, 255, .8);
+  padding: 4px; margin: 0; list-style: none; font-size: 13px;
+}
+#menu[hidden] { display: none; }
+#menu li { position: relative; padding: 6px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+#menu li:hover { background: rgba(59, 130, 246, .12); }
+#menu li.disabled { opacity: .45; cursor: default; }
+#menu li.disabled:hover { background: none; }
+#menu li.has-sub::after { content: "▸"; float: right; margin-left: 14px; opacity: .6; }
+#menu .sub {
+  display: none; position: absolute; left: calc(100% + 4px); top: -5px; z-index: 1;
+  min-width: 148px; max-height: 60vh; overflow: auto;
+  background: rgba(255, 255, 255, .88); backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(15, 23, 42, .12); border-radius: 10px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, .2); padding: 4px; margin: 0; list-style: none;
+}
+#menu li:hover > .sub { display: block; }
+#menu .divider { height: 1px; margin: 4px 6px; background: rgba(15, 23, 42, .12); cursor: default; }
+
+/* ---- 窗口 ---- */
+.win {
+  position: fixed; z-index: 10; display: flex; flex-direction: column;
+  background: rgba(255, 255, 255, .68);
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, .85); border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22), 0 3px 14px rgba(15, 23, 42, .12);
+  overflow: hidden;
+  transition: box-shadow .2s;
+}
+.win.focused {
+  border-color: #fff;
+  box-shadow: 0 36px 90px rgba(15, 23, 42, .28), 0 6px 22px rgba(15, 23, 42, .16);
+}
+.win-head {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 12px; cursor: move; touch-action: none; user-select: none;
+  background: rgba(15, 23, 42, .045);
+  border-bottom: 1px solid rgba(15, 23, 42, .08);
+}
+.win-title { font-weight: 600; font-size: 12.5px; color: #334155; white-space: nowrap; }
+.lamp { width: 12px; height: 12px; border-radius: 50%; flex: none; cursor: pointer; border: 1px solid rgba(0, 0, 0, .18); }
+.lamp:hover::before {
+  content: ""; display: block; width: 8px; height: 8px; margin: 1px;
+  border-radius: 3px; background: rgba(0, 0, 0, .24);
+}
+.lamp.r { background: #ff5f57; }
+.lamp.y { background: #febc2e; }
+.lamp.g { background: #28c840; position: relative; }
+.lamp.g::after {
+  content: attr(data-badge); position: absolute; top: -6px; right: -7px;
+  min-width: 14px; padding: 0 4px; border-radius: 7px;
+  background: #ef4444; color: #fff; font-size: 9px; line-height: 14px; text-align: center;
+  font-weight: 700; box-shadow: 0 2px 6px rgba(15, 23, 42, .3);
+}
+.lamp.g[data-badge=""]::after { display: none; }
+
+.win-body {
+  flex: 1; overflow: auto; padding: 14px; position: relative;
+  scrollbar-width: thin; scrollbar-color: rgba(15, 23, 42, .25) transparent;
+}
+.win-body .hint { color: #94a3b8; margin: 40px auto; text-align: center; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(24, var(--cell));
+  grid-auto-rows: var(--cell);
+  gap: var(--gap);
+  width: max-content; min-width: 100%;
+}
+
+/* ---- 状态色点：绿 RUNNING 黄 STARTING 红 ERROR 灰 其他/STOPPED ---- */
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #94a3b8; }
+.dot.RUNNING { background: #22c55e; }
+.dot.STARTING { background: #eab308; }
+.dot.ERROR { background: #ef4444; }
+
+/* ---- 卡片：无装帧，iframe 铺满；编辑态遮罩拖动/手柄 ---- */
+.card { position: relative; }
+.card iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  border: 0; display: block; background: transparent;
+}
+.card.off iframe { display: none; }
+.card.dragging, .card.resizing { outline: 2px dashed rgba(59, 130, 246, .75); outline-offset: -2px; z-index: 5; }
+body.interacting iframe { pointer-events: none; }
+body.editing .card iframe { pointer-events: none; } /* 编辑态整卡交由遮罩接管 */
+#dragMask { position: fixed; inset: 0; z-index: 3000; background: transparent; }
+#dragMask[hidden] { display: none; }
+
+/* 编辑态全卡遮罩：浏览态完全不渲染 */
+.card-mask { display: none; position: absolute; inset: 0; z-index: 2; cursor: grab; background: transparent; }
+body.editing .card-mask {
+  display: block;
+  border-radius: 8px; touch-action: none;
+}
+body.editing .card.dragging .card-mask { cursor: grabbing; }
+body.editing .card:hover .card-mask {
+  outline: 2px dashed rgba(59, 130, 246, .55); outline-offset: -2px;
+  background:
+    linear-gradient(#3b82f6, #3b82f6) 0 0/9px 9px no-repeat,
+    linear-gradient(#3b82f6, #3b82f6) 100% 0/9px 9px no-repeat,
+    linear-gradient(#3b82f6, #3b82f6) 0 100%/9px 9px no-repeat,
+    linear-gradient(#3b82f6, #3b82f6) 100% 100%/9px 9px no-repeat;
+}
+/* 被拖/缩放卡置于网格叠层之上 */
+.card.dragging, .card.resizing { z-index: 60; }
+
+/* 边缘缩放手柄（仅编辑态 hover 浮现） */
+.rz { position: absolute; z-index: 3; display: none; background: rgba(59, 130, 246, .55); transition: opacity .15s; touch-action: none; }
+body.editing .rz { display: block; opacity: 0; }
+.rz-r { right: -2px; top: 6px; bottom: 6px; width: 4px; cursor: ew-resize; }
+.rz-b { bottom: -2px; left: 6px; right: 6px; height: 4px; cursor: ns-resize; }
+.rz-br { right: -2px; bottom: -2px; width: 14px; height: 14px; cursor: nwse-resize; background: none; }
+.rz-br::after {
+  content: ""; position: absolute; right: 0; bottom: 0; width: 9px; height: 9px;
+  border-radius: 3px; background: rgba(59, 130, 246, .55);
+}
+body.editing .card:hover .rz { opacity: .9; }
+
+/* 编辑态桌面图标拖动 */
+body.editing .icon { cursor: grab; }
+.icon.lift { transform: scale(1.12); opacity: .85; z-index: 50; }
+
+/* 组件库拖拽的预览槽位与指针跟随标签（预览渲染在所有卡片之上） */
+.slot-ghost {
+  position: relative; z-index: 90; pointer-events: none;
+  border: 2px dashed rgba(59, 130, 246, .7);
+  background: rgba(59, 130, 246, .1); border-radius: 8px;
+}
+.ghost {
+  position: fixed; z-index: 3001; pointer-events: none;
+  padding: 5px 10px; border-radius: 6px; background: rgba(59, 130, 246, .95);
+  color: #fff; font-size: 12px; box-shadow: 0 6px 16px rgba(15, 23, 42, .25);
+}
+/* 叠放预告：落点/缩放盖到邻居时橙红高亮 */
+.slot-ghost.overlap {
+  border-color: rgba(234, 88, 12, .85);
+  background: rgba(234, 88, 12, .14);
+}
+/* 拖动/缩放期间的半透明网格线叠层（58px 步进；结束即收） */
+.grid {
+  position: relative;
+  transition: grid-template-rows .18s ease; /* 行数扩展平滑 */
+}
+.grid-overlay {
+  position: absolute; inset: 0; z-index: 55; pointer-events: none; display: none;
+  background:
+    repeating-linear-gradient(to right, rgba(100, 116, 139, .10) 0 1px, transparent 1px 58px),
+    repeating-linear-gradient(to bottom, rgba(100, 116, 139, .10) 0 1px, transparent 1px 58px);
+}
+.grid-overlay.show { display: block; }
+
+/* ---- 组件库面板 ---- */
+#library {
+  top: 46px; right: 14px; bottom: 14px; min-width: 250px; max-width: 280px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#library[hidden] { display: none; }
+#library.drop-target { outline: 2px dashed #3b82f6; outline-offset: -3px; }
+.lib-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid rgba(15, 23, 42, .08);
+  font-size: 13px; color: #334155;
+}
+.lib-head b { font-weight: 600; }
+.lib-head button {
+  border: 0; background: none; color: #64748b; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 5px;
+}
+.lib-head button:hover { background: rgba(15, 23, 42, .08); }
+#libList { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+#libList::-webkit-scrollbar { width: 8px; }
+#libList::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, .2); border-radius: 4px; }
+.lib-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px; border: 1px solid rgba(15, 23, 42, .1);
+  border-radius: 8px; background: rgba(255, 255, 255, .65); cursor: pointer;
+}
+.lib-row.used { background: rgba(255, 255, 255, .4); }
+.lib-row.unused { border-color: rgba(16, 185, 129, .55); }
+.lib-row:hover { background: #fff; }
+.lib-name {
+  flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #1f2937;
+}
+.lib-act {
+  flex: none; padding: 2px 8px; border: 1px solid rgba(15, 23, 42, .18);
+  border-radius: 6px; background: #fff;
+  color: #1f2937; cursor: pointer; font-size: 11px;
+}
+.lib-act:hover { background: #f1f5f9; }
+.lib-act:disabled { opacity: .45; cursor: default; }
+.lib-tag { flex: none; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 8px; }
+.lib-row.used .lib-tag { background: rgba(59, 130, 246, .12); color: #1d4ed8; }
+.lib-row.unused .lib-tag { background: rgba(16, 185, 129, .16); color: #047857; font-weight: 600; }
