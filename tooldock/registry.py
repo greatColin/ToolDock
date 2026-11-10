@@ -32,7 +32,7 @@ class Registry:
     def __init__(self, root: Path):
         self.root = root
         self.plugins_dir = root / "plugins"
-        self.db_path = root / "hub.db"
+        self.db_path = root / "tooldock.db"
         self.config_path = root / "config.json"
         self.modules: dict[str, Module] = {}
         self.tabs: dict[str, list[dict]] = {}

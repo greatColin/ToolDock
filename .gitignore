@@ -1,6 +1,6 @@
 __pycache__/
 config.json
-hub.db
+tooldock.db
 *.png
 hub_start.log
 *.log

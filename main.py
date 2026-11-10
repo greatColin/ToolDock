@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from core.registry import DEFAULT_SPAN, Registry
+from tooldock.registry import DEFAULT_SPAN, Registry
 
 ROOT = Path(__file__).parent
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -65,7 +65,7 @@ async def lifespan(_):
     await reg.stop_all()
 
 
-app = FastAPI(title="工具整合平台", lifespan=lifespan)
+app = FastAPI(title="ToolDock 工具集线平台", lifespan=lifespan)
 
 
 @app.middleware("http")

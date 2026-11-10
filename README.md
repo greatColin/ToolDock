@@ -1,4 +1,6 @@
-# 工具集整合平台（tools hub）
+# ToolDock — 统一接入口工具平台
+
+> **English** — ToolDock is a unified access platform for personal Python tools. It carries no business logic of its own: every tool plugs in as an ordinary Python package that exposes a FastAPI `app` plus two async lifecycle hooks (`init` / `shutdown`). ToolDock handles everything else — discovery, single-port prefix routing, consistent start/stop events (`STOPPED / STARTING / RUNNING / ERROR`), and a Mac-style desktop dashboard where each tool's components can be freely composed: repeated, moved across tabs, and mixed with auto-generated control cards. Compositions persist as a SQLite template and are restored verbatim on every launch. One contract, one port, zero coupling — your tools stay plain Python; the dock does the rest.
 
 **统一接入口平台**：本身不承担任何业务功能，仅通过一套最小接口（契约）把独立的 Python 工具插件解耦地接入进来——hub 负责发现、生命周期事件（统一启动/关闭）、单端口暴露与组件自由组合，工具本身与 hub 之间只认契约不认实现。
 
@@ -32,7 +34,7 @@ D:/python/envs/py310/python.exe run_module.py demo_notes [--port 9900]
 - **组件自由组合**：24 列自由网格（50px 单元、卡片拖动落锚/缩放、span 4×4~24×16）；组件可重复、可跨标签页混排（功能组件与控制组件并用）；组合结果即 SQLite 模板。
 - **控制组件**：模块初始化即拥有，宿主渲染零模块工作量；只遥控不保活（"模块控制"页集中遥控不会引发自启；功能引用清空即停）。
 - **桌面仪表盘**：标签页=App（首字母徽章、双击开窗、红灯关窗）；右上滑块切换编辑/浏览双态（防误触）；组件库按模块分组（控制组件行 + 功能组件行）。
-- **模板持久化（SQLite）**：`hub.db` 两表 `tabs(name,idx)` / `placements(id,tab_id,module,col,row,span_w,span_h,type)`；每次编辑完整落库，启动按模板初始化；首次启动自动迁移遗留 `config.json` 并删除。
+- **模板持久化（SQLite）**：`tooldock.db` 两表 `tabs(name,idx)` / `placements(id,tab_id,module,col,row,span_w,span_h,type)`；每次编辑完整落库，启动按模板初始化；首次启动自动迁移遗留 `config.json` 并删除。
 - **静态资源 no-cache**：前端改动立即生效，排除"改了没反应"的浏览器缓存坑。
 
 ## 目录结构
@@ -79,7 +81,7 @@ async def shutdown()   # 幂等，可重复调用
 
 ## 开发注意事项
 
-- 运行数据 `hub.db` 已 gitignore；勿手编。
+- 运行数据 `tooldock.db` 已 gitignore；勿手编。
 - 模块加载失败不会拖垮宿主：注册表记录 ERROR 并跳过。
 - Ctrl+C 逆序优雅 shutdown 所有模块。
 - 改前端不生效时先硬刷新（历史教训，见 agent.md）。
