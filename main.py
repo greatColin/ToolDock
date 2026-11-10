@@ -49,7 +49,10 @@ def _validate_tabs(raw) -> dict[str, list[dict]]:
                 col = None
             if not isinstance(rowv, int) or rowv < 1:
                 rowv = None
-            lst.append({"id": lid, "name": name, "span": span, "col": col, "row": rowv})
+            ptype = e.get("type") or "page"
+            if ptype not in ("page", "ctrl"):
+                raise HTTPException(400, f"{name} type 非法")
+            lst.append({"id": lid, "name": name, "span": span, "col": col, "row": rowv, "type": ptype})
         out[tname.strip()] = lst
     return out
 
@@ -82,9 +85,10 @@ async def get_config():
 @app.put("/api/config")
 async def put_config(body: dict = Body(...)):
     tabs = _validate_tabs(body.get("tabs"))
-    old, new = reg.referenced(), {e["name"] for es in tabs.values() for e in es}
-    reg.tabs, new_tabs = tabs, None
+    old = reg.referenced()
+    reg.tabs = tabs
     reg.save_config()
+    new = reg.referenced()
     for name in new - old:
         await reg.start(name)
     for name in old - new:

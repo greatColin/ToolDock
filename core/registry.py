@@ -60,14 +60,19 @@ class Registry:
     def _db(self):
         import sqlite3
         conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")  # 删除标签时级联清 placements，防孤儿行因 rowid 复用错挂
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS tabs(
                 id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, idx INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS placements(
                 id TEXT PRIMARY KEY, tab_id INTEGER NOT NULL, module TEXT NOT NULL,
                 col INTEGER, row INTEGER, span_w INTEGER NOT NULL DEFAULT 6, span_h INTEGER NOT NULL DEFAULT 5,
+                type TEXT NOT NULL DEFAULT 'page',
                 FOREIGN KEY(tab_id) REFERENCES tabs(id) ON DELETE CASCADE);
         """)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(placements)")]
+        if "type" not in cols:
+            conn.execute("ALTER TABLE placements ADD COLUMN type TEXT NOT NULL DEFAULT 'page'")
         return conn
 
     def _migration_source(self) -> dict | None:
@@ -84,11 +89,11 @@ class Registry:
             rows = conn.execute(
                 "SELECT name FROM tabs ORDER BY idx").fetchall()
             tabs = {name: [] for (name,) in rows}
-            for pid, tname, module, col, row, sw, sh in conn.execute(
-                "SELECT p.id, t.name, p.module, p.col, p.row, p.span_w, p.span_h "
+            for pid, tname, module, col, row, sw, sh, ptype in conn.execute(
+                "SELECT p.id, t.name, p.module, p.col, p.row, p.span_w, p.span_h, p.type "
                 "FROM placements p JOIN tabs t ON t.id = p.tab_id ORDER BY t.idx, p.rowid"):
                 tabs.setdefault(tname, []).append(
-                    {"id": pid, "name": module, "span": [sw, sh], "col": col, "row": row})
+                    {"id": pid, "name": module, "span": [sw, sh], "col": col, "row": row, "type": ptype})
         if not tabs:  # 空库尝试迁移旧 config.json
             legacy = self._migration_source()
             if legacy:
@@ -113,6 +118,8 @@ class Registry:
         placed = {e["name"] for e_list in tabs.values() for e in e_list}
         for e_list in tabs.values():
             for e in e_list:
+                if e.get("type") not in ("page", "ctrl"):
+                    e["type"] = "page"
                 if not isinstance(e.get("id"), str) or not e["id"]:
                     e["id"] = f"{e['name']}-{uuid.uuid4().hex[:8]}"
         first = next(iter(tabs))
@@ -131,21 +138,26 @@ class Registry:
                     col = e.get("col")
                     row = e.get("row")
                     conn.execute(
-                        "INSERT OR REPLACE INTO placements(id, tab_id, module, col, row, span_w, span_h)"
-                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT OR REPLACE INTO placements(id, tab_id, module, col, row, span_w, span_h, type)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (e["id"], tab_id, e["name"],
                          col if isinstance(col, int) and col >= 1 else None,
                          row if isinstance(row, int) and row >= 1 else None,
-                         e["span"][0], e["span"][1]))
+                         e["span"][0], e["span"][1],
+                         e.get("type", "page")))
+
+    # ---- 引用：仅功能组件(page)算"使用中"；控制组件只显示状态与启停，不保活 ----
+    def is_page(self, e: dict) -> bool:
+        return e.get("type", "page") != "ctrl"
 
     def referenced(self) -> set[str]:
-        return {e["name"] for entries in self.tabs.values() for e in entries}
+        return {e["name"] for entries in self.tabs.values() for e in entries if self.is_page(e)}
 
     def _referenced_order(self) -> list[str]:
         order, seen = [], set()
         for entries in self.tabs.values():
             for e in entries:
-                if e["name"] not in seen:
+                if self.is_page(e) and e["name"] not in seen:
                     order.append(e["name"])
                     seen.add(e["name"])
         return order

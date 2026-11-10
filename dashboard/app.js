@@ -73,7 +73,7 @@ function postModule(name, action) {
 const dotCls = st => `dot ${st}`;
 
 function updateBadges() {
-  const unused = Object.keys(states).filter(n => !refPlaces(n).length).length;
+  const unused = Object.keys(states).filter(n => !pagePlaces(n).length).length;
   document.querySelectorAll(".lamp.g").forEach(l => { l.dataset.badge = unused > 0 ? String(unused) : ""; });
 }
 
@@ -81,12 +81,12 @@ function updateStateUI(name) {
   for (const win of winMap.values()) {
     for (const el of win.cards.values()) if (el.dataset.name === name) applyCardState(el);
   }
-  const row = libList.querySelector(`.lib-row[data-name="${CSS.escape(name)}"]`);
-  if (row) {
+  const grp = libList.querySelector(`.lib-mod[data-name="${CSS.escape(name)}"]`);
+  if (grp) {
     const st = states[name] ?? "STOPPED";
-    row.querySelector(".dot").className = dotCls(st);
-    const act = row.querySelector(".lib-act");
-    act.textContent = st === "RUNNING" ? "停止" : st === "STARTING" ? "启动中…" : "启动";
+    grp.querySelector(".lib-group .dot").className = dotCls(st);
+    const act = grp.querySelector(".lib-act");
+    act.textContent = st === "RUNNING" ? "停止" : st === "STARTING" ? "启动中…" : st === "STOPPED" ? "启动" : "重试";
     act.disabled = st === "STARTING";
   }
   updateBadges();
@@ -462,6 +462,21 @@ function refPlaces(name) {
   return out;
 }
 
+/* 保活语义：仅 page 类型算"使用中"（控制组件不保活）；type 缺省 = page */
+const isPage = e => e.type !== "ctrl";
+
+function pagePlaces(name) {
+  const out = [];
+  for (const [t, list] of Object.entries(tabs)) for (const e of list) if (e.name === name && isPage(e)) out.push(t);
+  return out;
+}
+
+function ctrlCount(name) {
+  let n = 0;
+  for (const list of Object.values(tabs)) for (const e of list) if (e.name === name && !isPage(e)) n++;
+  return n;
+}
+
 function renderWindow(win) {
   const list = tabs[win.tab];
   normalizeEntries(list);
@@ -486,8 +501,6 @@ function createCard(entry, win) {
   card.dataset.name = entry.name;
   card._entry = entry;
 
-  const iframe = document.createElement("iframe");
-  iframe.title = entry.name;
   const mask = document.createElement("div");
   mask.className = "card-mask"; // 编辑态全卡遮罩：自由拖动
   mask.title = "编辑模式：按住自由拖动落锚；边缘可缩放";
@@ -497,17 +510,33 @@ function createCard(entry, win) {
   rzB.className = "rz rz-b";
   const rzBR = document.createElement("div");
   rzBR.className = "rz rz-br";
-  const chip = document.createElement("div");
-  chip.className = "ctrl-chip";
-  chip.innerHTML = `<span class="dot"></span><span class="chip-st"></span><button class="chip-btn" type="button"></button>`;
-  // 浏览态 hover 浮现 / 非 RUNNING 常驻；编辑态常驻可点（z 高于遮罩）
-  chip.addEventListener("click", e => {
-    e.stopPropagation();
-    const n = card.dataset.name, st = states[n] ?? "STOPPED";
-    if (st === "STARTING") return;
-    postModule(n, st === "RUNNING" ? "stop" : "start");
-  });
-  card.append(iframe, chip, mask, rzR, rzB, rzBR);
+  if (entry.type === "ctrl") {
+    // 控制组件卡：宿主渲染（无 iframe），居中 = 模块名 / 状态点+状态文字 / 互斥大按钮
+    card.classList.add("ctrl");
+    const body = document.createElement("div");
+    body.className = "ctrl-card";
+    const cName = document.createElement("div");
+    cName.className = "ctrl-name";
+    const cSt = document.createElement("div");
+    cSt.className = "ctrl-st";
+    cSt.innerHTML = `<span class="dot"></span><span class="st-text"></span>`;
+    const btn = document.createElement("button");
+    btn.className = "ctrl-btn";
+    btn.type = "button";
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const n = card.dataset.name, st = states[n] ?? "STOPPED";
+      if (st === "STARTING") return;
+      postModule(n, st === "RUNNING" ? "stop" : "start");
+    });
+    body.append(cName, cSt, btn);
+    card.append(body);
+  } else {
+    const iframe = document.createElement("iframe");
+    iframe.title = entry.name;
+    card.append(iframe);
+  }
+  card.append(mask, rzR, rzB, rzBR);
 
   bindCardDrag(mask, card, win);
   bindResize(rzR, card, win, "x");
@@ -522,22 +551,21 @@ function createCard(entry, win) {
   return card;
 }
 
-/* 控制芯片：状态点 + 状态文字 + 互斥操作按钮（同模块多卡经 updateStateUI→applyCardState 同步） */
-function updateChip(card, name, st) {
-  const chip = card.querySelector(".ctrl-chip");
-  chip.querySelector(".dot").className = dotCls(st);
-  chip.querySelector(".chip-st").textContent =
-    st === "RUNNING" ? "运行中" : st === "STARTING" ? "启动中" : st === "ERROR" ? "已出错" : "已停止";
-  const btn = chip.querySelector(".chip-btn");
-  btn.textContent = st === "RUNNING" ? "关闭" : st === "STARTING" ? "启动中…" : st === "ERROR" ? "重试" : "启动";
-  btn.disabled = st === "STARTING";
-  chip.classList.toggle("always", st !== "RUNNING"); // 非 RUNNING 时浏览态也常驻
-}
+/* 控制组件卡同步：状态点 + 状态文字 + 互斥按钮（同模块多卡经 updateStateUI→applyCardState 同步） */
+const stText = st => st === "RUNNING" ? "运行中" : st === "STARTING" ? "启动中" : st === "ERROR" ? "已出错" : "已停止";
 
-/* 仅 RUNNING 渲染 iframe；下线摘除不留死帧 */
 function applyCardState(card) {
   const name = card.dataset.name, st = states[name] ?? "STOPPED";
-  updateChip(card, name, st);
+  if (card.classList.contains("ctrl")) {
+    card.querySelector(".ctrl-name").textContent = name;
+    card.querySelector(".dot").className = dotCls(st);
+    card.querySelector(".st-text").textContent = stText(st);
+    const btn = card.querySelector(".ctrl-btn");
+    btn.textContent = st === "RUNNING" ? "关闭" : st === "STARTING" ? "启动中…" : st === "ERROR" ? "重试" : "启动";
+    btn.disabled = st === "STARTING";
+    return;
+  }
+  /* 仅 RUNNING 渲染 iframe；下线摘除不留死帧 */
   const iframe = card.querySelector("iframe");
   if (st === "RUNNING") {
     if (!iframe.dataset.run) {
@@ -569,10 +597,11 @@ probeSrc.cache = new Map();
 function showCardMenu(card, win, x, y) {
   const name = card.dataset.name;
   const st = states[name] ?? "STOPPED";
+  const ctrl = card.classList.contains("ctrl");
   focusWin(win);
   openMenu([
     {
-      label: st === "RUNNING" ? "强制关闭" : st === "STARTING" ? "启动中…" : "启动",
+      label: st === "RUNNING" ? (ctrl ? "关闭" : "强制关闭") : st === "STARTING" ? "启动中…" : ctrl ? (st === "ERROR" ? "重试" : "启动") : "启动",
       disabled: st === "STARTING",
       act: () => { postModule(name, st === "RUNNING" ? "stop" : "start"); closeMenu(); },
     },
@@ -639,53 +668,80 @@ function closeLibrary() {
 
 libClose.onclick = closeLibrary;
 
-/* ---- 组件库列表 ---- */
+/* ---- 组件库列表：按模块分组，组头=模块名+状态点+启停；组内 控制组件（默认）/功能组件 两行 ---- */
 function renderLibrary() {
   libList.textContent = "";
-  let unused = 0;
   for (const name of Object.keys(states)) {
-    const places = refPlaces(name);
-    const row = document.createElement("div");
-    row.className = "lib-row" + (places.length ? " used" : " unused");
-    row.dataset.name = name;
+    const st = states[name] ?? "STOPPED";
+    const pages = pagePlaces(name), ctrls = ctrlCount(name);
+    const mod = document.createElement("div");
+    mod.className = "lib-mod";
+    mod.dataset.name = name;
+
+    const head = document.createElement("div");
+    head.className = "lib-group";
     const dot = document.createElement("span");
-    dot.className = dotCls(states[name] ?? "STOPPED");
+    dot.className = dotCls(st);
     const label = document.createElement("span");
     label.className = "lib-name";
     label.textContent = name;
     const act = document.createElement("button");
     act.className = "lib-act";
-    const st = states[name] ?? "STOPPED";
-    act.textContent = st === "RUNNING" ? "停止" : st === "STARTING" ? "启动中…" : "启动";
+    act.textContent = st === "RUNNING" ? "停止" : st === "STARTING" ? "启动中…" : st === "STOPPED" ? "启动" : "重试";
     act.disabled = st === "STARTING";
     act.onclick = e => {
       e.stopPropagation();
-      postModule(name, (states[name] ?? "STOPPED") === "RUNNING" ? "stop" : "start");
+      const st2 = states[name] ?? "STOPPED";
+      if (st2 !== "STARTING") postModule(name, st2 === "RUNNING" ? "stop" : "start");
     };
     const tag = document.createElement("span");
     tag.className = "lib-tag";
-    if (places.length) {
-      tag.textContent = "位于 " + places[0] + (places.length > 1 ? " ×" + places.length : "");
-      row.title = "点击=再添加一份（自动找空位）；按住拖到网格可指定位置";
+    if (pages.length) {
+      tag.textContent = "位于 " + pages[0] + (pages.length > 1 ? " ×" + pages.length : "");
+      head.title = "启动/停止作用于整个模块；下方两行点击=添加摆放（自动找空位）";
     } else {
-      unused++;
-      tag.textContent = "未启用";
-      row.title = "点击加入（自动找空位）；按住拖到网格可指定位置";
+      tag.textContent = ctrls ? "仅控制" : "未启用";
+      head.title = "模块无功能页面引用时不保活；下方两行点击=添加摆放（自动找空位）";
     }
-    row.onclick = () => { if (libWin) addToTab(libWin, name); };
-    bindLibraryDrag(row, name);
-    row.append(dot, label, act, tag);
-    libList.append(row);
+    head.append(dot, label, act, tag);
+
+    const rowC = document.createElement("div");
+    rowC.className = "lib-row ctrl-row" + (ctrls ? " used" : "");
+    rowC.dataset.kind = "ctrl";
+    rowC.dataset.name = name;
+    rowC.title = "点击/拖入=添加控制组件（宿主小卡，不保活）";
+    rowC.innerHTML = `<span class="lib-kind">控制组件</span><span class="lib-tag">默认</span>`
+      + (ctrls ? `<span class="lib-tag ctag">×${ctrls}</span>` : "");
+    rowC.onclick = () => { if (libWin) addToTab(libWin, name, "ctrl"); };
+    bindLibraryDrag(rowC, name, "ctrl");
+
+    const rowP = document.createElement("div");
+    rowP.className = "lib-row" + (pages.length ? " used" : " unused");
+    rowP.dataset.kind = "page";
+    rowP.dataset.name = name;
+    rowP.title = pages.length
+      ? "点击=再添加一份（自动找空位）；按住拖到网格可指定位置"
+      : "点击加入（自动找空位）；按住拖到网格可指定位置";
+    rowP.innerHTML = `<span class="lib-kind">功能组件</span>`
+      + (pages.length ? `<span class="lib-tag ctag">×${pages.length}</span>` : `<span class="lib-tag">未启用</span>`);
+    rowP.onclick = () => { if (libWin) addToTab(libWin, name, "page"); };
+    bindLibraryDrag(rowP, name, "page");
+
+    mod.append(head, rowC, rowP);
+    libList.append(mod);
   }
   updateBadges();
 }
 
-/* 点选添加：first-fit（行优先扫描）而不是尾部追加 */
-function addToTab(win, name) {
+const CTRL_DEF = [4, 4]; // 服务端 VALID_MIN_SPAN 为 [4,4]
+
+/* 点选添加：first-fit（行优先扫描）而不是尾部追加；控制组件=宿主小卡（不保活） */
+function addToTab(win, name, kind) {
   const list = tabs[win.tab];
   normalizeEntries(list);
-  const spot = firstFit(occupiedCells(list), DEF[0], DEF[1]);
-  const entry = { name, span: [...DEF], col: spot.col, row: spot.row };
+  const span = kind === "ctrl" ? [...CTRL_DEF] : [...DEF];
+  const spot = firstFit(occupiedCells(list), span[0], span[1]);
+  const entry = { name, type: kind === "ctrl" ? "ctrl" : "page", span, col: spot.col, row: spot.row };
   flipCards(win, () => {
     list.push(entry);
     renderWindow(win);
@@ -721,7 +777,8 @@ function moveToTab(entry, option) {
 }
 
 /* 行拖入：位移超过阈值才进拖放（纯点击保留原生 click=first-fit 追加） */
-function bindLibraryDrag(row, name) {
+function bindLibraryDrag(row, name, kind) {
+  const span = kind === "ctrl" ? [...CTRL_DEF] : [...DEF];
   row.addEventListener("pointerdown", e => {
     if (e.button !== 0) return;
     const sx = e.clientX, sy = e.clientY;
@@ -732,7 +789,7 @@ function bindLibraryDrag(row, name) {
       if (libWin) gridOverlay(libWin, true);
       ghost = document.createElement("div");
       ghost.className = "ghost";
-      ghost.textContent = name;
+      ghost.textContent = kind === "ctrl" ? `⚙ ${name} · 控制组件` : name;
       document.body.append(ghost);
       ph = document.createElement("div");
       ph.className = "card slot-ghost";
@@ -744,11 +801,11 @@ function bindLibraryDrag(row, name) {
       ghost.style.left = ev.clientX + 10 + "px";
       ghost.style.top = ev.clientY + 10 + "px";
       if (libWin && overWinBody(ev.clientX, ev.clientY, libWin)) {
-        const t = anchorAtRaw(libWin.grid, ev.clientX, ev.clientY, DEF[0] / 2 * STEP, DEF[1] / 2 * STEP);
+        const t = anchorAtRaw(libWin.grid, ev.clientX, ev.clientY, span[0] / 2 * STEP, span[1] / 2 * STEP);
         if (!inGrid) { libWin.grid.append(ph); inGrid = true; }
         ph.style.display = "";
-        applyRect(ph, t.col, t.row, DEF[0], DEF[1]);
-        ph.classList.toggle("overlap", !rectFits(tabs[libWin.tab], t.col, t.row, DEF[0], DEF[1], null));
+        applyRect(ph, t.col, t.row, span[0], span[1]);
+        ph.classList.toggle("overlap", !rectFits(tabs[libWin.tab], t.col, t.row, span[0], span[1], null));
       } else if (inGrid) {
         ph.remove();
         inGrid = false;
@@ -764,13 +821,13 @@ function bindLibraryDrag(row, name) {
       ghost.remove();
       ph.remove();
       if (libWin && overWinBody(ev.clientX, ev.clientY, libWin)) {
-        const t = anchorAtRaw(libWin.grid, ev.clientX, ev.clientY, DEF[0] / 2 * STEP, DEF[1] / 2 * STEP);
+        const t = anchorAtRaw(libWin.grid, ev.clientX, ev.clientY, span[0] / 2 * STEP, span[1] / 2 * STEP);
         let col = t.col, roww = t.row;
-        if (!rectFits(tabs[libWin.tab], col, roww, DEF[0], DEF[1], null)) {
-          const fit = nearestFit(tabs[libWin.tab], col, roww, DEF[0], DEF[1], null);
+        if (!rectFits(tabs[libWin.tab], col, roww, span[0], span[1], null)) {
+          const fit = nearestFit(tabs[libWin.tab], col, roww, span[0], span[1], null);
           if (fit) { col = fit.col; roww = fit.row; }
         }
-        const entry = { name, span: [...DEF], col, row: roww };
+        const entry = { name, type: kind === "ctrl" ? "ctrl" : "page", span: [...span], col, row: roww };
         flipCards(libWin, () => {
           tabs[libWin.tab].push(entry);
           renderWindow(libWin);
