@@ -43,7 +43,7 @@ D:/python/envs/py310/python.exe run_module.py demo_notes [--port 9900]
 ```text
 main.py           # host: discover plugins → prefix mounts → dashboard API → init on startup / graceful shutdown
 run_module.py     # standalone runner for a single module
-core/registry.py  # registry: module discovery / state machine / SQLite template persistence / SSE events
+tooldock/registry.py  # registry: module discovery / state machine / SQLite template persistence / SSE events
 plugins/<name>/   # one directory per module
   module.py       #   module contract (single entry point)
   *.html          #   module pages (/ = full page, /card = compact card view, optional)

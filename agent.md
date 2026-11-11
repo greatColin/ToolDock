@@ -7,8 +7,8 @@
 
 ```
 run_module.py      # python run_module.py <名字> [--port 9900]：单模块独立运行
-main.py            # 宿主：发现 plugins/<名字>/module.py → 按 /<名字>/ 挂载 → 同端口仪表盘 /；html/css/js 一律 Cache-Control: no-cache
-core/registry.py   # 注册表：发现/去重/状态机/config 生命周期
+main.py            # 宿主=唯一 server（单端口 8500）：发现 plugins/<名字>/module.py → 按 /<名字>/ 挂载 → 同端口仪表盘 /；html/css/js 一律 Cache-Control: no-cache
+tooldock/registry.py # 注册表：发现/去重/状态机/config 生命周期
 plugins/<名字>/    # 一个模块一个目录，挂载前缀 = 目录名
 tooldock.db            # SQLite 模板库（自动生成，gitignore）：tabs(name, idx) + placements(id, tab_id, module, col, row, span_w, span_h)；每次布局编辑即整体落库，启动按当前模板初始化；首次启动如存在旧 config.json 自动迁移后删除，两者不可并存
 ```
@@ -31,6 +31,12 @@ async def shutdown()   # 幂等，必须能清理半途 init 失败的残留
 - 前端请求一律相对路径，禁止硬编码端口或绝对 URL。
 - 阻塞调用由模块自行处理（线程池/子进程），不得卡宿主事件循环。
 - init/shutdown 必须幂等——这是强制关闭、重开、崩溃恢复的地基，例外零容忍。
+
+## 接口挂载与单端口（强制）
+
+- 插件不创建任何 server：模块内禁止 `uvicorn`、`asyncio.start_server`、开端口、自写 main；HTTP 与 WebSocket 的一切接口只经顶层 `app = FastAPI()` 暴露。
+- 宿主发现后统一挂载：`app.mount(f"/{名字}", m.app)`（main.py），仪表盘与全部插件共用同一 uvicorn、同一端口、同一 origin——iframe 天然同源，无跨域、cookie 与存储隔离问题；这也是"前端一律相对路径、禁绝对 URL"的地基。
+- 确需脱离此形态（独立进程/独立端口）属架构级例外：先在本节登记约定与原因再实现，任何模块不得私下起服务。
 
 ## 修改流程（每次变更强制）
 

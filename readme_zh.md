@@ -43,7 +43,7 @@ D:/python/envs/py310/python.exe run_module.py demo_notes [--port 9900]
 ```text
 main.py           # 宿主：发现 plugins → 前缀挂载 → 仪表盘 API → 启动初始化/优雅退出
 run_module.py     # 单模块独立运行器
-core/registry.py  # 注册表：模块发现/状态机/SQLite 模板持久化/SSE 事件
+tooldock/registry.py  # 注册表：模块发现/状态机/SQLite 模板持久化/SSE 事件
 plugins/<名字>/   # 一个模块一个目录
   module.py       #   模块契约（唯一入口）
   *.html          #   模块页面（/ 为完整页，/card 为紧凑卡视图，可选）
