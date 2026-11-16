@@ -34,7 +34,7 @@ D:/python/envs/py310/python.exe run_module.py demo_notes [--port 9900]
 - **Custom plugins**: a module = FastAPI app + two async events; single-port prefix routing (`/<name>/…`, WebSocket passed through natively); pages fully customizable (`/card` compact view optional); a module that fails to load never takes down the host.
 - **Free composition**: 24-column free grid (50px cells, cards drag to anchor / resize; span 4×4–24×16); components can be duplicated and mixed across tabs (function and control components together); the composition is persisted as a SQLite template.
 - **Control components**: available as soon as a module is initialized, rendered by the host with zero module effort; remote control only, no keep-alive (remoting from the "Module Control" tab does not auto-start modules; clearing the function references stops them).
-- **Desktop dashboard**: tab = App (initial badge, double-click to open a window, red light to close); top-right slider toggles edit/browse modes (prevents mis-taps); component library grouped by module (control row + function row).
+- **Desktop dashboard**: tab = App (initial badge, double-click or Dock click to open a window, red light to close); the macOS shell = top menu bar + desktop widgets (clock / running overview / shortcuts) + bottom Dock; the Dock edit switch toggles edit/browse modes (prevents mis-taps); the component library is docked on the right and grouped by module (control row + function row); the settings panel switches wallpaper, glass intensity, widget visibility and motion (stored in the browser).
 - **Template persistence (SQLite)**: `tooldock.db` with two tables `tabs(name, idx)` / `placements(id, tab_id, module, col, row, span_w, span_h, type)`; every edit is persisted in full, startup initializes from the template; the legacy `config.json` is migrated on first launch and then deleted.
 - **No-cache static assets**: frontend changes take effect immediately, avoiding the "I changed it but nothing happened" browser-cache trap.
 
@@ -73,13 +73,14 @@ Key points (see agent.md for details; the template modules `plugins/demo_notes` 
 
 | Action | How |
 |---|---|
-| Open a tab window | Double-click the desktop icon |
+| Open a tab window | Double-click the desktop icon, or click the same App in the Dock |
 | Close / maximize / add components | Window title-bar red light / yellow light / green light |
-| Place components | Pick or drag from the green-light component library; in edit mode cards can be dragged to anchor and resized at their edges |
-| Enter / leave edit mode | Top-right slider (browse mode = components clickable, edit mode = layout only) |
+| Place components | Pick or drag from the right-docked component library; in edit mode cards can be dragged to anchor and resized at their edges |
+| Enter / leave edit mode | Dock edit switch (browse mode = components clickable, edit mode = layout only) |
 | Start / stop a module | Control card button (works wherever it is placed) or the card context menu |
-| Rename / uninstall a tab | Icon context menu (uninstall = remove references; modules with no function references are stopped) |
-| Create a tab | "New Tab" desktop icon |
+| Rename / uninstall a tab | Right-click the desktop or Dock icon (uninstall = remove references; modules with no function references are stopped) |
+| Create a tab | "New App" desktop icon, Dock plus, or the "新建 App" menu item |
+| Desktop appearance | "设置" in the menu bar / Dock / desktop shortcuts: wallpaper, glass intensity, widgets, motion |
 
 ## Development Notes
 

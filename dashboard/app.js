@@ -17,7 +17,8 @@ const STEP = 58, MIN = 4, MAX_W = 24, MAX_H = 16, DEF = [6, 5], MAX_SCAN_ROWS = 
 const $ = id => document.getElementById(id);
 const icons = $("icons"), addIcon = $("addIcon"), editSwitch = $("editSwitch"), editLabel = $("editLabel");
 const menu = $("menu"), library = $("library"), libList = $("libList"), libClose = $("libClose");
-const dragMask = $("dragMask");
+const dragMask = $("dragMask"), dockApps = $("dockApps"), dock = $("dock");
+const settingsPanel = $("settingsPanel"), settingsToggle = $("settingsToggle");
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 const palette = [
@@ -35,11 +36,20 @@ const iconColor = name => palette[[...name].reduce((a, c) => a + c.charCodeAt(0)
 let tabs = {};         // 标签名 -> [{id?, name, span:[w,h], col, row}]；锚点可由前端 first-fit 补齐
 let states = {};       // 模块名 -> 状态（同模块多份共享）
 const winMap = new Map(); // 标签名 -> win {tab, el, body, grid, cards:Map(entry->卡片), max}
-let zTop = 1;
+let zTop = 100;
 let libWin = null;
 let dropGuard = 0;
 let editMode = false;
+let toastTimer;
 
+const DEFAULT_PREFS = { wallpaper: "aurora", widgets: true, magnify: true, reduceMotion: false, blur: 24 };
+let prefs = { ...DEFAULT_PREFS };
+try {
+  const stored = JSON.parse(localStorage.getItem("tooldock.appearance") || "{}");
+  prefs = { ...prefs, ...stored };
+} catch {}
+
+setupDesktop();
 init().catch(e => alert("初始化失败：" + e.message));
 
 async function init() {
@@ -48,7 +58,197 @@ async function init() {
   tabs = (await cfg.json()).tabs;
   for (const [name, m] of Object.entries((await st.json()).modules)) states[name] = m.state;
   renderIcons();
-  startSSE(); // 默认不开窗：窗口仅由双击图标打开
+  startSSE(); // 默认不开窗：窗口仅由双击图标或 Dock 单击打开
+}
+
+/* ---- macOS 桌面：时钟、Dock、快捷入口与本地外观偏好 ---- */
+function showToast(message) {
+  clearTimeout(toastTimer);
+  $("toast").textContent = message;
+  $("toast").classList.add("show");
+  toastTimer = setTimeout(() => $("toast").classList.remove("show"), 1900);
+}
+
+function updateClock() {
+  const now = new Date();
+  const time = now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const date = now.toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
+  const weekday = now.toLocaleDateString("zh-CN", { weekday: "long" });
+  $("menuClock").textContent = `${date} ${weekday.slice(-2)} ${time}`;
+  $("widgetTime").textContent = time;
+  $("widgetDate").textContent = `${now.getFullYear()}年${date}`;
+  $("clockWeekday").textContent = weekday;
+}
+
+function savePrefs() {
+  try { localStorage.setItem("tooldock.appearance", JSON.stringify(prefs)); } catch {}
+}
+
+function applyPrefs() {
+  if (!["aurora", "sunset", "graphite"].includes(prefs.wallpaper)) prefs.wallpaper = DEFAULT_PREFS.wallpaper;
+  prefs.blur = clamp(Number(prefs.blur) || DEFAULT_PREFS.blur, 12, 40);
+  prefs.widgets = prefs.widgets !== false;
+  prefs.magnify = prefs.magnify !== false;
+  prefs.reduceMotion = prefs.reduceMotion === true;
+  document.body.dataset.wallpaper = prefs.wallpaper;
+  document.body.classList.toggle("hide-widgets", !prefs.widgets);
+  document.body.classList.toggle("reduce-motion", prefs.reduceMotion);
+  document.documentElement.style.setProperty("--glass-blur", `${prefs.blur}px`);
+  $("widgetsSwitch").setAttribute("aria-checked", String(prefs.widgets));
+  $("magnifySwitch").setAttribute("aria-checked", String(prefs.magnify));
+  $("motionSwitch").setAttribute("aria-checked", String(prefs.reduceMotion));
+  $("blurRange").value = prefs.blur;
+  $("blurValue").textContent = prefs.blur < 20 ? "轻盈" : prefs.blur < 32 ? "适中" : "柔和";
+  document.querySelectorAll("[data-wallpaper-choice]").forEach(button => {
+    button.setAttribute("aria-checked", String(button.dataset.wallpaperChoice === prefs.wallpaper));
+  });
+  if (!prefs.magnify) dock.querySelectorAll(".dock-item").forEach(item => item.style.setProperty("--scale", 1));
+}
+
+function setSwitch(button, key) {
+  prefs[key] = !prefs[key];
+  applyPrefs();
+  savePrefs();
+}
+
+function toggleSettings(force) {
+  const open = typeof force === "boolean" ? force : settingsPanel.hidden;
+  settingsPanel.hidden = !open;
+  settingsToggle.classList.toggle("active", open);
+  settingsToggle.setAttribute("aria-expanded", String(open));
+  if (open) {
+    closeMenu();
+    closeLibrary();
+  }
+  updateDockState();
+}
+
+function openGlobalLibrary() {
+  toggleSettings(false);
+  let win = [...winMap.values()].find(item => item.el.classList.contains("focused"));
+  if (!win) win = winMap.values().next().value;
+  if (!win) {
+    const first = Object.keys(tabs)[0];
+    if (!first) return;
+    openWindow(first);
+    win = winMap.get(first);
+  }
+  focusWin(win);
+  openLibrary(win);
+}
+
+function updateDockState() {
+  dockApps.querySelectorAll("[data-tab]").forEach(button => {
+    button.classList.toggle("running", winMap.has(button.dataset.tab));
+  });
+  $("dockLibrary").classList.toggle("running", !library.hidden);
+  $("dockSettings").classList.toggle("running", !settingsPanel.hidden);
+}
+
+function openTabMenu(name, x, y) {
+  openMenu([
+    { label: "打开", act: () => { closeMenu(); openWindow(name); } },
+    { label: "重命名…", act: () => { closeMenu(); renameTab(name); } },
+    { label: "卸载…", act: () => { closeMenu(); uninstallTab(name); } },
+  ], x, y);
+}
+
+function renderDockApps() {
+  dockApps.textContent = "";
+  for (const name of Object.keys(tabs)) {
+    const button = document.createElement("button");
+    button.className = "dock-item";
+    button.dataset.tab = name;
+    button.setAttribute("aria-label", `打开 ${name}`);
+    const icon = document.createElement("span");
+    icon.className = "dock-icon";
+    icon.style.background = iconColor(name);
+    icon.textContent = (name[0] || "?").toUpperCase();
+    const label = document.createElement("span");
+    label.className = "dock-tooltip";
+    label.textContent = name;
+    button.append(icon, label);
+    button.addEventListener("click", () => openWindow(name));
+    button.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTabMenu(name, event.clientX, event.clientY);
+    });
+    dockApps.append(button);
+  }
+  updateDockState();
+}
+
+function updateOverview() {
+  const names = Object.keys(states);
+  const running = names.filter(name => states[name] === "RUNNING").length;
+  const starting = names.filter(name => states[name] === "STARTING").length;
+  $("widgetRunning").textContent = running;
+  $("widgetModules").textContent = names.length;
+  $("widgetApps").textContent = Object.keys(tabs).length;
+  $("menuStatusText").textContent = starting ? `${starting} 个模块启动中` : running ? `${running} 个模块运行中` : "组件已就绪";
+  const strip = $("moduleStrip");
+  strip.textContent = "";
+  for (const name of names) {
+    const bar = document.createElement("span");
+    bar.className = states[name] || "STOPPED";
+    bar.title = `${name} · ${stText(states[name])}`;
+    strip.append(bar);
+  }
+  updateDockState();
+}
+
+function setupDesktop() {
+  applyPrefs();
+  updateClock();
+  setInterval(updateClock, 30000);
+  for (const id of ["menuNew", "quickNew", "dockNew"]) $(id).addEventListener("click", createTab);
+  for (const id of ["menuLibrary", "quickLibrary", "dockLibrary", "overviewRunning", "overviewModules"]) {
+    $(id).addEventListener("click", openGlobalLibrary);
+  }
+  for (const id of ["menuEdit", "quickEdit"]) $(id).addEventListener("click", () => setEditMode(!editMode));
+  $("overviewApps").addEventListener("click", () => showToast(`桌面共有 ${Object.keys(tabs).length} 个 App，双击图标打开`));
+  for (const id of ["settingsToggle", "quickSettings", "dockSettings"]) $(id).addEventListener("click", () => toggleSettings());
+  $("settingsClose").addEventListener("click", () => toggleSettings(false));
+  $("widgetsSwitch").addEventListener("click", event => setSwitch(event.currentTarget, "widgets"));
+  $("magnifySwitch").addEventListener("click", event => setSwitch(event.currentTarget, "magnify"));
+  $("motionSwitch").addEventListener("click", event => setSwitch(event.currentTarget, "reduceMotion"));
+  $("blurRange").addEventListener("input", event => {
+    prefs.blur = Number(event.target.value);
+    applyPrefs();
+    savePrefs();
+  });
+  document.querySelectorAll("[data-wallpaper-choice]").forEach(button => {
+    button.addEventListener("click", () => {
+      prefs.wallpaper = button.dataset.wallpaperChoice;
+      applyPrefs();
+      savePrefs();
+    });
+  });
+
+  dock.addEventListener("pointermove", event => {
+    if (!prefs.magnify || prefs.reduceMotion) return;
+    dock.querySelectorAll(".dock-item").forEach(item => {
+      const rect = item.getBoundingClientRect();
+      const distance = Math.abs(event.clientX - rect.left - rect.width / 2);
+      const influence = Math.max(0, 1 - distance / 112);
+      item.style.setProperty("--scale", (1 + influence * .42).toFixed(3));
+    });
+  });
+  dock.addEventListener("pointerleave", () => {
+    dock.querySelectorAll(".dock-item").forEach(item => item.style.setProperty("--scale", 1));
+  });
+
+  $("desktop").addEventListener("contextmenu", event => {
+    if (event.target.closest(".icon,.dock,.desktop-widget,.menu-bar")) return;
+    event.preventDefault();
+    openMenu([
+      { label: "新建 App…", act: () => { closeMenu(); createTab(); } },
+      { label: "添加组件…", act: () => { closeMenu(); openGlobalLibrary(); } },
+      { label: editMode ? "退出布局编辑" : "编辑布局", act: () => { closeMenu(); setEditMode(!editMode); } },
+      { label: "桌面设置…", act: () => { closeMenu(); toggleSettings(true); } },
+    ], event.clientX, event.clientY);
+  });
 }
 
 /* ---- 状态订阅 ---- */
@@ -75,6 +275,7 @@ const dotCls = st => `dot ${st}`;
 function updateBadges() {
   const unused = Object.keys(states).filter(n => !pagePlaces(n).length).length;
   document.querySelectorAll(".lamp.g").forEach(l => { l.dataset.badge = unused > 0 ? String(unused) : ""; });
+  updateOverview();
 }
 
 function updateStateUI(name) {
@@ -226,6 +427,7 @@ function renderIcons() {
   icons.textContent = "";
   for (const name of Object.keys(tabs)) icons.append(makeIcon(name));
   icons.append(addIcon);
+  renderDockApps();
   updateBadges();
 }
 
@@ -245,11 +447,7 @@ function makeIcon(name) {
   el.oncontextmenu = e => {
     e.preventDefault();
     e.stopPropagation();
-    openMenu([
-      { label: "打开", act: () => { closeMenu(); openWindow(name); } },
-      { label: "重命名…", act: () => { closeMenu(); renameTab(name); } },
-      { label: "卸载…", act: () => { closeMenu(); uninstallTab(name); } },
-    ], e.clientX, e.clientY);
+    openTabMenu(name, e.clientX, e.clientY);
   };
   bindIconDrag(el, name);
   return el;
@@ -368,16 +566,17 @@ function openWindow(tab) {
     </div>
     <div class="win-body">
       <div class="grid" aria-label="模块网格"><div class="grid-overlay" aria-hidden="true"></div></div>
-      <p class="hint" hidden>此 App 为空：点标题栏绿灯，从组件库添加模块。</p>
+      <div class="hint" hidden><span class="hint-icon"><svg><use href="#i-components"/></svg></span>这个工作台还是空的<div>从组件库选择功能卡片或控制组件</div><button type="button">浏览组件库</button></div>
     </div>`;
   el.querySelector(".win-title").textContent = tab;
   const win = { tab, el, body: el.querySelector(".win-body"), grid: el.querySelector(".grid"), cards: new Map(), max: false };
   const n = winMap.size;
-  const w = Math.min(920, window.innerWidth - 40), h = Math.min(560, window.innerHeight - 48);
+  const w = Math.min(920, window.innerWidth - 48), h = Math.min(580, window.innerHeight - 162);
   el.style.width = w + "px";
   el.style.height = h + "px";
-  el.style.left = clamp(64 + n * 32, 16, window.innerWidth - w - 16) + "px";
-  el.style.top = clamp(44 + n * 30, 8, window.innerHeight - h - 16) + "px";
+  el.style.left = clamp((window.innerWidth - w) / 2 + n * 24 - 20, 16, window.innerWidth - w - 16) + "px";
+  el.style.top = clamp(58 + n * 26, 42, window.innerHeight - h - 98) + "px";
+  el.querySelector(".hint button").onclick = () => openLibrary(win);
   const [lr, ly, lg] = el.querySelectorAll(".lamp");
   lr.onclick = e => { e.stopPropagation(); closeWindow(tab); };
   ly.onclick = e => { e.stopPropagation(); toggleMax(win); };
@@ -398,11 +597,13 @@ function closeWindow(tab) {
   for (const el of win.cards.values()) el.remove();
   win.cards.clear();
   win.el.remove();
+  updateDockState();
 }
 
 function focusWin(win) {
   win.el.style.zIndex = ++zTop;
   for (const w of winMap.values()) w.el.classList.toggle("focused", w === win);
+  updateDockState();
 }
 
 function toggleMax(win) {
@@ -412,20 +613,12 @@ function toggleMax(win) {
     win.max = false;
   } else {
     el.dataset.prev = JSON.stringify({ left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height });
-    el.style.left = "0px";
-    el.style.top = "0px";
-    el.style.width = "100vw";
-    el.style.height = "100vh";
+    el.style.left = "12px";
+    el.style.top = "42px";
+    el.style.width = "calc(100vw - 24px)";
+    el.style.height = "calc(100vh - 140px)";
     win.max = true;
   }
-  libWinMove();
-}
-
-function libWinMove() {
-  if (library.hidden || !libWin) return;
-  const r = libWin.el.getBoundingClientRect(), w = library.offsetWidth, h = library.offsetHeight;
-  library.style.left = clamp(r.left + 14, 8, window.innerWidth - w - 8) + "px";
-  library.style.top = clamp(r.top + 36, 8, window.innerHeight - h - 8) + "px";
 }
 
 function bindTitlebar(win) {
@@ -440,8 +633,7 @@ function bindTitlebar(win) {
     const ox = e.clientX - r.left, oy = e.clientY - r.top;
     const move = ev => {
       win.el.style.left = clamp(ev.clientX - ox, 24 - r.width, window.innerWidth - 24) + "px";
-      win.el.style.top = clamp(ev.clientY - oy, 0, window.innerHeight - 40) + "px";
-      libWinMove();
+      win.el.style.top = clamp(ev.clientY - oy, 42, window.innerHeight - 110) + "px";
     };
     const stop = () => {
       document.removeEventListener("pointermove", move);
@@ -657,13 +849,14 @@ function openLibrary(win) {
   libWin = win;
   library.hidden = false;
   renderLibrary();
-  libWinMove();
+  updateDockState();
 }
 
 function closeLibrary() {
   library.hidden = true;
   library.classList.remove("drop-target");
   libWin = null;
+  updateDockState();
 }
 
 libClose.onclick = closeLibrary;
@@ -857,7 +1050,9 @@ function setEditMode(on) {
   editSwitch.classList.toggle("on", on);
   editSwitch.setAttribute("aria-checked", on ? "true" : "false");
   editSwitch.title = on ? "完成（退出编辑模式）" : "编辑模式：拖动排序与缩放";
-  if (editLabel) editLabel.textContent = on ? "完成" : "编辑模式";
+  if (editLabel) editLabel.textContent = on ? "完成编辑" : "编辑布局";
+  const menuEdit = $("menuEdit");
+  if (menuEdit) menuEdit.textContent = on ? "退出编辑" : "布局编辑";
 }
 editSwitch.onclick = () => setEditMode(!editMode);
 
@@ -1002,14 +1197,21 @@ document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (!menu.hidden) closeMenu();
   if (!library.hidden) closeLibrary();
+  if (!settingsPanel.hidden) toggleSettings(false);
 });
 document.addEventListener("pointerdown", e => {
   const t = sel => e.target.closest && e.target.closest(sel);
   if (!menu.hidden && !t("#menu")) closeMenu();
+  if (!settingsPanel.hidden && !t("#settingsPanel") && !t("#settingsToggle") && !t("#dockSettings") && !t("#quickSettings")) {
+    toggleSettings(false);
+  }
   if (!library.hidden && performance.now() - dropGuard > 300
       && !t("#library")
       && !t(".card")
-      && !t(".lamp.g")) {
+      && !t(".lamp.g")
+      && !t("#dockLibrary")
+      && !t("#menuLibrary")
+      && !t("#quickLibrary")) {
     closeLibrary();
   }
 }, true);

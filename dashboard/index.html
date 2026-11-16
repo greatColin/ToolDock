@@ -3,25 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ToolDock</title>
+<meta name="theme-color" content="#7a77b5">
+<title>ToolDock · 工具桌面</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main id="desktop" aria-label="桌面">
-  <div id="icons">
-    <button id="addIcon" class="icon fresh" title="新建标签页">
-      <span class="disc">＋</span><span class="label">新建标签页</span>
+<svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs>
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 9h16M9 9v11" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="6.5" cy="6.5" r=".8" fill="currentColor"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor"/><rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor"/><rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor"/><rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9.6 3-.6 2.3-2 .9-2.2-.7-2 3.4 1.7 1.7v2.2l-1.7 1.7 2 3.4 2.2-.7 2 .9.6 2.4h4l.6-2.4 2-.9 2.2.7 2-3.4-1.7-1.7v-2.2l1.7-1.7-2-3.4-2.2.7-2-.9-.6-2.4h-4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="11.6" cy="11.7" r="3.1" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m14.8 4.3 4.9 4.9L8.4 20.5l-5.6.7.7-5.6L14.8 4.3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m12.8 6.3 4.9 4.9M4 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="i-components" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="3" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="13" width="8" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M17 14v6M14 17h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h18M9 9v12" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  </defs>
+</svg>
+
+<main id="desktop" aria-label="ToolDock 桌面">
+  <div class="wallpaper" aria-hidden="true"><span class="wallpaper-orb orb-one"></span><span class="wallpaper-orb orb-two"></span><span class="wallpaper-wave"></span><span class="wallpaper-grain"></span></div>
+
+  <header class="menu-bar">
+    <nav class="menu-left" aria-label="桌面菜单">
+      <span class="brand-mark"><svg><use href="#i-logo"/></svg></span>
+      <span class="brand-name">ToolDock</span>
+      <button class="menu-button optional-menu" id="menuNew">新建 App</button>
+      <button class="menu-button" id="menuLibrary">组件库</button>
+      <button class="menu-button optional-menu" id="menuEdit">布局编辑</button>
+    </nav>
+    <div class="menu-right">
+      <span class="menu-status" id="menuStatus"><i class="status-dot"></i><span id="menuStatusText">准备就绪</span></span>
+      <time class="menu-clock" id="menuClock"></time>
+      <button class="menu-button settings-button" id="settingsToggle" aria-expanded="false" aria-controls="settingsPanel" title="桌面设置"><svg><use href="#i-settings"/></svg><span>设置</span></button>
+    </div>
+  </header>
+
+  <section id="icons" aria-label="桌面 App">
+    <button id="addIcon" class="icon fresh" title="新建 App">
+      <span class="disc"><svg><use href="#i-plus"/></svg></span><span class="label">新建 App</span>
     </button>
-  </div>
+  </section>
+
+  <aside id="desktopWidgets" aria-label="桌面小组件">
+    <section class="desktop-widget clock-widget">
+      <div class="widget-kicker" id="clockWeekday">星期一</div>
+      <time class="widget-time" id="widgetTime">09:41</time>
+      <div class="widget-date" id="widgetDate"></div>
+      <span class="clock-decoration" aria-hidden="true"></span>
+    </section>
+    <section class="desktop-widget overview-widget">
+      <div class="widget-heading"><span>工作台概览</span><span class="live-label"><i></i>实时</span></div>
+      <div class="overview-stats">
+        <button id="overviewRunning" title="打开组件库"><strong id="widgetRunning">0</strong><span>运行中</span></button>
+        <button id="overviewModules" title="打开组件库"><strong id="widgetModules">0</strong><span>模块</span></button>
+        <button id="overviewApps" title="桌面 App"><strong id="widgetApps">0</strong><span>App</span></button>
+      </div>
+      <div class="module-strip" id="moduleStrip"></div>
+    </section>
+    <section class="desktop-widget shortcuts-widget">
+      <div class="widget-heading"><span>快捷操作</span></div>
+      <div class="shortcut-grid">
+        <button id="quickNew"><span class="shortcut-icon purple"><svg><use href="#i-plus"/></svg></span>新建 App</button>
+        <button id="quickLibrary"><span class="shortcut-icon blue"><svg><use href="#i-components"/></svg></span>添加组件</button>
+        <button id="quickEdit"><span class="shortcut-icon orange"><svg><use href="#i-edit"/></svg></span>编辑布局</button>
+        <button id="quickSettings"><span class="shortcut-icon gray"><svg><use href="#i-settings"/></svg></span>桌面设置</button>
+      </div>
+    </section>
+  </aside>
+
+  <div class="desktop-tip" id="desktopTip"><span class="tip-dot"></span>双击 App 打开工作台，右键管理组件</div>
+
+  <nav id="dock" class="dock" aria-label="应用坞">
+    <div id="dockApps" class="dock-apps"></div>
+    <span class="dock-divider" aria-hidden="true"></span>
+    <button class="dock-item" id="dockLibrary" aria-label="组件库"><span class="dock-icon dock-blue"><svg><use href="#i-grid"/></svg></span><span class="dock-tooltip">组件库</span></button>
+    <button class="dock-item optional-dock" id="dockNew" aria-label="新建 App"><span class="dock-icon dock-purple"><svg><use href="#i-plus"/></svg></span><span class="dock-tooltip">新建 App</span></button>
+    <button class="dock-item" id="editSwitch" role="switch" aria-checked="false" aria-label="编辑布局"><span class="dock-icon dock-orange"><svg><use href="#i-edit"/></svg></span><span class="dock-tooltip" id="editLabel">编辑布局</span></button>
+    <span class="dock-divider" aria-hidden="true"></span>
+    <button class="dock-item" id="dockSettings" aria-label="桌面设置"><span class="dock-icon dock-gray"><svg><use href="#i-settings"/></svg></span><span class="dock-tooltip">桌面设置</span></button>
+  </nav>
 </main>
-<button id="editSwitch" class="switch" role="switch" aria-checked="false" title="编辑模式：拖动排序与缩放（会话态不持久化）"><span class="knob"></span></button>
-<span id="editLabel" class="switch-label">编辑模式</span>
-<ul id="menu" hidden aria-label="上下文菜单"></ul>
-<aside id="library" hidden aria-label="组件库">
-  <div class="lib-head"><b>组件库</b><button id="libClose" title="关闭（Esc）">×</button></div>
+
+<aside id="settingsPanel" class="glass-panel settings-panel" hidden aria-label="桌面设置">
+  <div class="panel-title"><div><span class="panel-eyebrow">System</span><h2>桌面设置</h2></div><button class="icon-button" id="settingsClose" aria-label="关闭设置"><svg><use href="#i-close"/></svg></button></div>
+  <section class="setting-section">
+    <h3>桌面外观</h3>
+    <div class="wallpaper-options" role="radiogroup" aria-label="桌面壁纸">
+      <button class="wallpaper-option" data-wallpaper-choice="aurora" role="radio" aria-checked="true"><span class="wallpaper-swatch swatch-aurora"></span><span>极光</span></button>
+      <button class="wallpaper-option" data-wallpaper-choice="sunset" role="radio" aria-checked="false"><span class="wallpaper-swatch swatch-sunset"></span><span>落日</span></button>
+      <button class="wallpaper-option" data-wallpaper-choice="graphite" role="radio" aria-checked="false"><span class="wallpaper-swatch swatch-graphite"></span><span>石墨</span></button>
+    </div>
+  </section>
+  <section class="setting-section">
+    <div class="setting-row"><div><strong>悬浮小组件</strong><span>在桌面显示时间、状态与快捷操作</span></div><button class="mini-switch" id="widgetsSwitch" role="switch" aria-checked="true" aria-label="显示桌面小组件"><span></span></button></div>
+    <div class="setting-row"><div><strong>应用坞放大</strong><span>指针经过时放大相邻图标</span></div><button class="mini-switch" id="magnifySwitch" role="switch" aria-checked="true" aria-label="应用坞放大"><span></span></button></div>
+    <div class="setting-row"><div><strong>减少动态效果</strong><span>关闭悬浮与面板过渡动画</span></div><button class="mini-switch" id="motionSwitch" role="switch" aria-checked="false" aria-label="减少动态效果"><span></span></button></div>
+  </section>
+  <section class="setting-section blur-setting">
+    <label for="blurRange"><strong>毛玻璃强度</strong><span id="blurValue">适中</span></label>
+    <input id="blurRange" type="range" min="12" max="40" step="4" value="24">
+    <div class="range-labels"><span>轻盈</span><span>柔和</span></div>
+  </section>
+  <div class="settings-foot"><span class="settings-save-dot"></span>外观偏好自动保存在此浏览器</div>
+</aside>
+
+<ul id="menu" class="glass-panel" hidden aria-label="上下文菜单"></ul>
+<aside id="library" class="glass-panel" hidden aria-label="组件库">
+  <div class="lib-head"><div><span class="panel-eyebrow">Library</span><b>组件库</b></div><button id="libClose" class="icon-button" title="关闭（Esc）" aria-label="关闭组件库"><svg><use href="#i-close"/></svg></button></div>
+  <div class="lib-subtitle">点选自动摆放，或拖入窗口指定位置</div>
   <div id="libList"></div>
 </aside>
 <div id="dragMask" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
 </html>
