@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7d75c9">
+  <title>macOS Web Desktop</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #24232b;
+      --muted: #797783;
+      --line: rgba(255, 255, 255, .52);
+      --glass: rgba(248, 248, 252, .66);
+      --accent: #7357dc;
+      --dock-size: 54px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: #8c8acb;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible { outline: 2px solid rgba(108, 83, 218, .72); outline-offset: 3px; }
+    svg { display: block; }
+    .symbol-library { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+    .desktop {
+      position: relative;
+      width: 100%; height: 100%;
+      isolation: isolate;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 9% 9%, rgba(255, 209, 203, .9) 0, rgba(255, 209, 203, 0) 33%),
+        radial-gradient(ellipse at 93% 3%, rgba(198, 194, 255, .85) 0, rgba(198, 194, 255, 0) 37%),
+        linear-gradient(135deg, #bfadd6 0%, #8888bf 45%, #6478ad 100%);
+    }
+    .wallpaper {
+      position: absolute; inset: 0; z-index: -1; overflow: hidden;
+      pointer-events: none;
+    }
+    .wallpaper::before {
+      content: ""; position: absolute; width: 105vw; height: 89vh;
+      left: -21vw; top: 26vh;
+      border-radius: 48% 52% 0 0 / 52% 60% 0 0;
+      background: linear-gradient(155deg, rgba(255, 188, 174, .94), rgba(219, 139, 177, .82) 36%, rgba(106, 94, 172, .94) 78%);
+      transform: rotate(-14deg);
+      box-shadow: inset 0 2px 2px rgba(255,255,255,.28), 0 -20px 90px rgba(79,62,142,.14);
+    }
+    .wallpaper::after {
+      content: ""; position: absolute; width: 95vw; height: 78vh;
+      right: -35vw; top: 16vh;
+      border-radius: 60% 0 0 0 / 70% 0 0 0;
+      background: linear-gradient(135deg, rgba(238, 202, 217, .58), rgba(96, 96, 174, .72) 47%, #3d558d 100%);
+      transform: rotate(12deg);
+      box-shadow: inset 2px 2px 3px rgba(255,255,255,.22);
+    }
+    .wallpaper-glow {
+      position: absolute; width: 70vw; height: 40vh; left: 15vw; bottom: -25vh;
+      border-radius: 50%; background: rgba(247, 151, 164, .62); filter: blur(65px);
+    }
+    .wallpaper-noise {
+      position: absolute; inset: 0; opacity: .12; mix-blend-mode: soft-light;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    }
+
+    .menu-bar {
+      position: absolute; inset: 0 0 auto; z-index: 60;
+      height: 31px; padding: 0 17px;
+      display: flex; align-items: center; justify-content: space-between;
+      color: rgba(27, 25, 37, .92);
+      background: rgba(247, 244, 252, .48);
+      border-bottom: 1px solid rgba(255,255,255,.32);
+      box-shadow: 0 1px 12px rgba(46, 37, 83, .06);
+      backdrop-filter: blur(24px) saturate(150%);
+      -webkit-backdrop-filter: blur(24px) saturate(150%);
+      font-size: 12.5px; font-weight: 500;
+    }
+    .menu-left, .menu-right { height: 100%; display: flex; align-items: center; gap: 2px; }
+    .menu-item {
+      height: 24px; border: 0; border-radius: 5px; padding: 0 9px;
+      background: transparent; cursor: default;
+    }
+    .menu-item:hover, .menu-item.active { background: rgba(255,255,255,.4); }
+    .menu-item.strong { font-weight: 700; }
+    .apple-button { padding: 0 8px 0 3px; }
+    .apple-button svg { width: 16px; height: 18px; fill: currentColor; }
+    .menu-right { gap: 4px; }
+    .menu-right .menu-item { display: grid; place-items: center; padding: 0 6px; }
+    .status-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+    .battery { width: 23px; }
+    .date-label { padding-left: 8px; white-space: nowrap; font-size: 12px; }
+
+    .desktop-files { position: absolute; left: 24px; top: 55px; display: grid; gap: 19px; z-index: 1; }
+    .desktop-file {
+      width: 82px; padding: 7px 4px; border: 1px solid transparent; border-radius: 8px;
+      background: transparent; color: white; text-shadow: 0 1px 4px rgba(28,25,57,.65); cursor: default;
+    }
+    .desktop-file:hover, .desktop-file:focus-visible { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.18); }
+    .desktop-file svg { width: 50px; height: 50px; margin: 0 auto 5px; filter: drop-shadow(0 4px 5px rgba(38,28,68,.2)); }
+    .desktop-file span { display: block; font-size: 11px; line-height: 1.25; }
+
+    .widgets { position: absolute; top: 51px; right: 25px; width: 184px; display: grid; gap: 14px; z-index: 1; }
+    .widget {
+      border: 1px solid rgba(255,255,255,.38); border-radius: 22px;
+      background: rgba(245,242,251,.55); box-shadow: 0 12px 30px rgba(45,37,81,.12), inset 0 1px rgba(255,255,255,.5);
+      backdrop-filter: blur(25px) saturate(145%); -webkit-backdrop-filter: blur(25px) saturate(145%);
+      overflow: hidden;
+    }
+    .weather { padding: 17px 18px; }
+    .weather-city { font-size: 13px; font-weight: 650; }
+    .weather-temp { margin-top: 5px; font-size: 42px; font-weight: 300; letter-spacing: -2px; line-height: 1.1; }
+    .weather-desc { margin-top: 6px; color: #696473; font-size: 12px; }
+    .sun { float: right; width: 34px; height: 34px; margin-top: 5px; border-radius: 50%; background: #ffd66b; box-shadow: 0 0 0 7px rgba(255,214,107,.17), 0 0 25px rgba(255,193,69,.4); }
+    .calendar { display: flex; align-items: stretch; min-height: 78px; }
+    .calendar-date { width: 70px; display: grid; place-content: center; text-align: center; background: rgba(255,255,255,.26); }
+    .calendar-date span { color: #e05252; font-size: 11px; font-weight: 700; }
+    .calendar-date strong { font-size: 31px; font-weight: 500; line-height: 1.1; }
+    .calendar-agenda { padding: 14px 13px; font-size: 11px; color: #77717f; }
+    .calendar-agenda strong { display: block; margin-bottom: 5px; color: #34303a; font-size: 12px; }
+    .calendar-agenda i { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: #7459d9; vertical-align: 1px; }
+
+    .app-window {
+      position: absolute; z-index: 10;
+      left: 48%; top: calc(50% - 10px);
+      width: min(960px, calc(100vw - 270px)); height: min(610px, calc(100vh - 160px));
+      min-width: 620px; min-height: 430px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255,255,255,.58); border-radius: 15px;
+      background: rgba(246,245,250,.76);
+      box-shadow: 0 30px 80px rgba(29,24,60,.31), 0 3px 12px rgba(33,26,64,.16), inset 0 1px rgba(255,255,255,.8);
+      backdrop-filter: blur(36px) saturate(155%); -webkit-backdrop-filter: blur(36px) saturate(155%);
+      overflow: hidden;
+      transition: width .3s ease, height .3s ease, left .3s ease, top .3s ease, border-radius .3s ease, opacity .22s ease, transform .3s ease;
+    }
+    .app-window.maximized { left: 10px; top: 40px; width: calc(100vw - 20px); height: calc(100vh - 145px); transform: none; border-radius: 13px; }
+    .app-window.closing { opacity: 0; transform: translate(-50%, -47%) scale(.96); pointer-events: none; }
+    .app-window.maximized.closing { transform: scale(.96); }
+    .app-window.minimizing { opacity: 0; transform: translate(-42%, 40%) scale(.18); pointer-events: none; }
+    .app-window.hidden { display: none; }
+    .titlebar {
+      height: 51px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+      padding: 0 15px; border-bottom: 1px solid rgba(83,72,111,.09);
+      background: rgba(249,248,252,.45);
+    }
+    .traffic-lights { display: flex; gap: 8px; align-items: center; }
+    .traffic {
+      position: relative; width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%;
+      box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12); cursor: pointer;
+    }
+    .traffic.close { background: #ff5f57; }
+    .traffic.minimize { background: #febc2e; }
+    .traffic.maximize { background: #28c840; }
+    .traffic::before, .traffic::after { content: ""; position: absolute; opacity: 0; background: rgba(62,34,24,.65); }
+    .traffic-lights:hover .traffic::before, .traffic-lights:hover .traffic::after { opacity: 1; }
+    .traffic.close::before, .traffic.close::after { left: 3px; top: 5.5px; width: 6px; height: 1px; }
+    .traffic.close::before { transform: rotate(45deg); } .traffic.close::after { transform: rotate(-45deg); }
+    .traffic.minimize::before { left: 3px; top: 5.5px; width: 6px; height: 1px; }
+    .traffic.maximize::before { left: 5.5px; top: 3px; width: 1px; height: 6px; }
+    .traffic.maximize::after { left: 3px; top: 5.5px; width: 6px; height: 1px; }
+    .window-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; color: #4d4954; }
+    .window-title svg { width: 16px; height: 16px; }
+    .search-box { justify-self: end; position: relative; width: 185px; }
+    .search-box svg { position: absolute; width: 14px; height: 14px; left: 9px; top: 7px; color: #88838e; pointer-events: none; }
+    .search-box input {
+      width: 100%; height: 28px; padding: 0 10px 0 29px; border: 1px solid rgba(96,84,119,.12); border-radius: 7px;
+      background: rgba(224,222,230,.58); color: #423e49; font-size: 11.5px; outline: none;
+      transition: background .2s, box-shadow .2s;
+    }
+    .search-box input:focus { background: rgba(255,255,255,.85); box-shadow: 0 0 0 3px rgba(116,88,217,.12); }
+    .search-box input::placeholder { color: #8e8994; }
+
+    .window-body { height: calc(100% - 51px); display: flex; }
+    .sidebar {
+      flex: 0 0 178px; padding: 17px 11px 12px; display: flex; flex-direction: column;
+      border-right: 1px solid rgba(82,70,109,.08); background: rgba(224,221,233,.34);
+    }
+    .sidebar-heading { margin: 5px 10px 8px; color: #96909e; font-size: 10px; font-weight: 650; letter-spacing: .04em; }
+    .side-item {
+      width: 100%; height: 34px; padding: 0 10px; display: flex; align-items: center; gap: 10px;
+      border: 0; border-radius: 7px; background: transparent; font-size: 12px; text-align: left; cursor: pointer;
+    }
+    .side-item svg { width: 17px; height: 17px; color: #7861c5; }
+    .side-item:hover { background: rgba(255,255,255,.36); }
+    .side-item.active { background: rgba(117,89,211,.13); color: #6446bd; font-weight: 600; }
+    .sidebar-bottom { margin-top: auto; }
+    .storage { margin: 12px 10px 8px; }
+    .storage-label { display: flex; justify-content: space-between; color: #8e8794; font-size: 9px; }
+    .storage-track { height: 3px; margin-top: 7px; overflow: hidden; border-radius: 3px; background: rgba(93,81,112,.12); }
+    .storage-track span { display: block; width: 63%; height: 100%; border-radius: inherit; background: #8a70d2; }
+    .profile { display: flex; align-items: center; gap: 9px; margin-top: 13px; padding: 10px 8px 1px; border-top: 1px solid rgba(77,63,99,.08); }
+    .avatar { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(145deg,#ddd1f1,#9b8abf); color: white; font-size: 11px; font-weight: 650; box-shadow: inset 0 0 0 1px rgba(255,255,255,.5); }
+    .profile strong { display: block; font-size: 10.5px; font-weight: 600; }
+    .profile span { color: #96909b; font-size: 9px; }
+
+    .showcase { flex: 1; min-width: 0; overflow: auto; padding: 24px 27px 26px; scrollbar-width: thin; scrollbar-color: rgba(96,84,118,.22) transparent; }
+    .welcome { display: flex; align-items: end; justify-content: space-between; margin-bottom: 19px; }
+    .eyebrow { margin-bottom: 5px; color: #8e8797; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .welcome h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.04em; }
+    .welcome-meta { color: #8a8492; font-size: 10.5px; padding-bottom: 3px; }
+    .hero {
+      position: relative; height: 174px; padding: 25px 27px; overflow: hidden; border-radius: 19px;
+      color: white; background: linear-gradient(125deg, #27233e 0%, #534078 48%, #9a75c9 100%);
+      box-shadow: 0 10px 25px rgba(66,46,111,.17), inset 0 1px rgba(255,255,255,.18);
+    }
+    .hero::before { content: ""; position: absolute; width: 290px; height: 290px; right: -56px; top: -114px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; box-shadow: 0 0 0 34px rgba(255,255,255,.035), 0 0 0 78px rgba(255,255,255,.025); }
+    .hero-copy { position: relative; z-index: 2; width: 60%; }
+    .hero-tag { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; color: rgba(255,255,255,.68); font-size: 9px; font-weight: 650; letter-spacing: .16em; }
+    .hero-tag::before { content: ""; width: 13px; height: 1px; background: #d5bcff; }
+    .hero h2 { margin: 0 0 7px; font-size: 23px; font-weight: 600; letter-spacing: -.03em; }
+    .hero p { margin: 0; color: rgba(255,255,255,.67); font-size: 11px; line-height: 1.6; }
+    .hero-button { margin-top: 16px; padding: 7px 13px; border: 1px solid rgba(255,255,255,.25); border-radius: 7px; background: rgba(255,255,255,.92); color: #463562; font-size: 10px; font-weight: 650; cursor: pointer; box-shadow: 0 3px 8px rgba(22,14,43,.15); }
+    .hero-button:hover { background: white; transform: translateY(-1px); }
+    .hero-art { position: absolute; z-index: 1; right: 45px; top: 23px; width: 128px; height: 128px; transform: rotate(7deg); }
+    .hero-art .app-svg { width: 100%; height: 100%; border-radius: 28px; filter: drop-shadow(0 15px 17px rgba(21,12,49,.32)); }
+    .floating-chip { position: absolute; padding: 7px 10px; border: 1px solid rgba(255,255,255,.28); border-radius: 9px; background: rgba(255,255,255,.17); backdrop-filter: blur(12px); color: white; font-size: 8px; box-shadow: 0 7px 17px rgba(20,14,44,.16); }
+    .chip-one { right: 16px; bottom: 18px; transform: rotate(-8deg); }
+    .chip-two { left: 148px; top: 20px; transform: rotate(-9deg); }
+    .section-row { display: flex; align-items: center; justify-content: space-between; margin: 23px 1px 13px; }
+    .section-row h3 { margin: 0; font-size: 14px; font-weight: 650; }
+    .section-row button { border: 0; background: transparent; color: #8063c5; font-size: 10px; cursor: pointer; }
+    .app-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .app-card {
+      position: relative; min-width: 0; padding: 14px 11px 12px; border: 1px solid rgba(255,255,255,.62); border-radius: 14px;
+      background: rgba(255,255,255,.4); text-align: center; cursor: pointer;
+      box-shadow: 0 3px 10px rgba(62,46,88,.035), inset 0 1px rgba(255,255,255,.48);
+      transition: transform .18s, background .18s, box-shadow .18s;
+    }
+    .app-card:hover { transform: translateY(-3px); background: rgba(255,255,255,.66); box-shadow: 0 8px 17px rgba(62,46,88,.09); }
+    .app-card .app-svg { width: 55px; height: 55px; margin: 0 auto 9px; filter: drop-shadow(0 5px 6px rgba(53,41,76,.13)); }
+    .app-card strong { display: block; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .app-card small { display: block; margin-top: 3px; color: #96909c; font-size: 8.5px; }
+    .get-button { min-width: 43px; margin-top: 9px; padding: 3px 9px; border: 0; border-radius: 10px; background: rgba(116,86,201,.1); color: #7252bf; font-size: 8px; font-weight: 700; cursor: pointer; }
+    .app-card:hover .get-button { background: #7656c8; color: white; }
+    .empty-state { display: none; padding: 40px 10px; text-align: center; color: #8b8493; font-size: 12px; }
+    .empty-state.visible { display: block; }
+
+    .app-svg { overflow: visible; }
+    .dock-wrap { position: absolute; z-index: 50; left: 50%; bottom: 13px; transform: translateX(-50%); }
+    .dock {
+      display: flex; align-items: flex-end; gap: 5px; height: 75px; padding: 7px 9px;
+      border: 1px solid rgba(255,255,255,.48); border-radius: 22px;
+      background: rgba(239,237,246,.43); box-shadow: 0 13px 30px rgba(33,25,64,.25), inset 0 1px rgba(255,255,255,.55);
+      backdrop-filter: blur(28px) saturate(165%); -webkit-backdrop-filter: blur(28px) saturate(165%);
+    }
+    .dock-item {
+      --scale: 1;
+      position: relative; flex: 0 0 var(--dock-size); width: var(--dock-size); height: var(--dock-size); padding: 0;
+      border: 0; background: transparent; cursor: pointer; transform-origin: center bottom;
+      transform: translateY(calc((var(--scale) - 1) * -13px)) scale(var(--scale));
+      transition: transform .09s ease-out;
+    }
+    .dock-icon { width: 100%; height: 100%; border-radius: 13px; filter: drop-shadow(0 4px 4px rgba(42,31,65,.18)); transition: filter .2s; }
+    .dock-item:active .dock-icon { filter: brightness(.82) drop-shadow(0 3px 4px rgba(42,31,65,.18)); }
+    .dock-item.running::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px; border-radius: 50%; background: rgba(41,36,55,.65); transform: translateX(-50%); }
+    .dock-separator { flex: 0 0 1px; width: 1px; height: 43px; margin: 0 3px 5px; background: rgba(74,63,94,.2); box-shadow: 1px 0 rgba(255,255,255,.25); }
+    .tooltip {
+      position: absolute; left: 50%; bottom: calc(100% + 19px); padding: 5px 10px; border: 1px solid rgba(255,255,255,.34); border-radius: 6px;
+      background: rgba(46,41,59,.72); color: white; backdrop-filter: blur(10px); font-size: 10px; font-weight: 500; white-space: nowrap;
+      opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(4px); transition: opacity .15s, transform .15s;
+    }
+    .dock-item:hover .tooltip { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .launchpad {
+      position: absolute; inset: 31px 0 0; z-index: 40; padding: 35px 30px 110px;
+      background: rgba(43,37,68,.43); backdrop-filter: blur(30px) saturate(120%); -webkit-backdrop-filter: blur(30px) saturate(120%);
+      opacity: 0; visibility: hidden; transition: opacity .24s, visibility .24s;
+    }
+    .launchpad.open { opacity: 1; visibility: visible; }
+    .launchpad-search { position: relative; display: block; width: 230px; margin: 0 auto; }
+    .launchpad-search svg { position: absolute; left: 10px; top: 7px; width: 14px; height: 14px; color: rgba(255,255,255,.65); }
+    .launchpad-search input { width: 100%; height: 28px; padding: 0 12px 0 31px; border: 1px solid rgba(255,255,255,.25); border-radius: 7px; background: rgba(255,255,255,.13); color: white; text-align: center; font-size: 11px; outline: none; }
+    .launchpad-search input::placeholder { color: rgba(255,255,255,.72); }
+    .launchpad-grid { max-width: 790px; margin: clamp(45px, 8vh, 80px) auto 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: clamp(25px, 5vh, 45px) 35px; }
+    .launch-app { border: 0; background: transparent; color: white; cursor: pointer; text-shadow: 0 2px 5px rgba(21,15,38,.4); }
+    .launch-app .app-svg { width: 72px; height: 72px; margin: 0 auto 9px; filter: drop-shadow(0 8px 8px rgba(26,18,49,.23)); transition: transform .18s; }
+    .launch-app:hover .app-svg { transform: scale(1.08); }
+    .launch-app span { font-size: 11px; }
+
+    .control-center {
+      position: absolute; z-index: 70; top: 38px; right: 13px; width: 290px; padding: 12px;
+      border: 1px solid rgba(255,255,255,.54); border-radius: 17px; background: rgba(242,240,248,.72);
+      box-shadow: 0 18px 45px rgba(33,26,61,.23); backdrop-filter: blur(30px) saturate(160%);
+      opacity: 0; visibility: hidden; transform: translateY(-7px) scale(.97); transform-origin: top right; transition: .18s;
+    }
+    .control-center.open { opacity: 1; visibility: visible; transform: none; }
+    .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .control-card { padding: 12px; border: 1px solid rgba(255,255,255,.57); border-radius: 12px; background: rgba(255,255,255,.41); }
+    .connectivity { grid-row: span 2; display: grid; align-content: center; gap: 13px; }
+    .connection { display: flex; align-items: center; gap: 9px; font-size: 10px; }
+    .connection-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #7562d5; color: white; }
+    .connection-icon svg { width: 14px; height: 14px; }
+    .connection strong { display: block; font-size: 10px; font-weight: 600; }
+    .connection small { color: #8a8491; font-size: 8px; }
+    .control-card.focus { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+    .moon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: #7562d5; color: white; font-size: 15px; }
+    .slider-label { display: block; margin-bottom: 8px; font-size: 10px; font-weight: 600; }
+    .control-card input { width: 100%; height: 4px; accent-color: #7661cb; }
+
+    .toast {
+      position: absolute; z-index: 80; left: 50%; bottom: 104px; padding: 10px 17px;
+      border: 1px solid rgba(255,255,255,.4); border-radius: 12px; background: rgba(39,34,53,.78); color: white;
+      box-shadow: 0 8px 25px rgba(24,18,45,.18); backdrop-filter: blur(15px); font-size: 11px;
+      opacity: 0; pointer-events: none; transform: translate(-50%, 8px); transition: .22s;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (min-width: 1500px) {
+      .app-window { width: 1020px; height: min(640px, calc(100vh - 175px)); }
+      .widgets { right: 36px; width: 200px; }
+    }
+    @media (max-width: 1180px) {
+      .widgets { display: none; }
+      .app-window { left: 50%; width: min(920px, calc(100vw - 110px)); }
+      .desktop-files { left: 13px; }
+    }
+    @media (max-width: 860px) {
+      .desktop-files, .desktop-only { display: none; }
+      .app-window { width: calc(100vw - 36px); min-width: 0; height: calc(100vh - 155px); min-height: 390px; }
+      .sidebar { flex-basis: 150px; }
+      .showcase { padding: 20px; }
+      .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .hero-art { right: 24px; width: 108px; height: 108px; top: 32px; }
+      .hero-copy { width: 68%; }
+      .dock { gap: 3px; }
+      :root { --dock-size: 48px; }
+      .dock-item.hide-medium { display: none; }
+      .launchpad-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .menu-bar { padding: 0 8px; }
+      .menu-left .menu-item:not(.apple-button):not(.strong), .battery, .wifi-status { display: none; }
+      .date-label { font-size: 10px; }
+      .app-window { top: 41px; left: 10px; width: calc(100vw - 20px); height: calc(100vh - 143px); transform: none; border-radius: 13px; }
+      .app-window.closing, .app-window.minimizing { transform: translateY(30px) scale(.9); }
+      .app-window.maximized { top: 38px; left: 7px; width: calc(100vw - 14px); height: calc(100vh - 133px); }
+      .titlebar { grid-template-columns: 1fr 1fr; height: 47px; }
+      .window-title { display: none; }
+      .search-box { width: 145px; }
+      .window-body { height: calc(100% - 47px); }
+      .sidebar { display: none; }
+      .showcase { padding: 17px 15px; }
+      .welcome h1 { font-size: 22px; }
+      .welcome-meta { display: none; }
+      .hero { height: 164px; padding: 22px; }
+      .hero h2 { font-size: 20px; }
+      .hero-copy { width: 72%; }
+      .hero-art { right: -9px; top: 41px; width: 101px; height: 101px; opacity: .8; }
+      .chip-two { display: none; }
+      .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .app-card { padding: 12px 6px 10px; }
+      .app-card .app-svg { width: 49px; height: 49px; }
+      :root { --dock-size: 44px; }
+      .dock-wrap { bottom: 9px; }
+      .dock { height: 63px; padding: 6px 7px; border-radius: 18px; }
+      .dock-item.hide-small { display: none; }
+      .dock-separator { height: 35px; margin: 0 2px 4px; }
+      .launchpad { padding: 28px 18px 90px; }
+      .launchpad-grid { grid-template-columns: repeat(4, 1fr); gap: 30px 12px; margin-top: 45px; }
+      .launch-app .app-svg { width: 56px; height: 56px; }
+      .control-center { right: 8px; width: min(290px, calc(100vw - 16px)); }
+    }
+    @media (max-height: 650px) {
+      .app-window { min-height: 360px; height: calc(100vh - 130px); }
+      .widgets { gap: 8px; }
+      .calendar { display: none; }
+      .dock-wrap { bottom: 7px; }
+      .hero { height: 155px; padding-top: 19px; }
+      .hero-button { margin-top: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg class="symbol-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="apple" viewBox="0 0 24 24"><path d="M17.05 12.54c-.02-2.37 1.93-3.51 2.02-3.56a4.35 4.35 0 0 0-3.43-1.85c-1.45-.15-2.86.87-3.6.87-.75 0-1.88-.85-3.1-.83a4.55 4.55 0 0 0-3.83 2.34c-1.66 2.87-.42 7.1 1.17 9.43.8 1.14 1.73 2.42 2.96 2.37 1.2-.05 1.65-.76 3.1-.76 1.44 0 1.86.76 3.11.73 1.29-.02 2.1-1.15 2.87-2.3a9.3 9.3 0 0 0 1.31-2.67 4.1 4.1 0 0 1-2.58-3.77ZM15.09 5.7A4.18 4.18 0 0 0 16.05 2.7a4.27 4.27 0 0 0-2.76 1.42 3.98 3.98 0 0 0-.98 2.91 3.53 3.53 0 0 0 2.78-1.33Z"/></symbol>
+      <symbol id="search" viewBox="0 0 24 24"><circle cx="10.7" cy="10.7" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="wifi" viewBox="0 0 24 24"><path d="M3 8.8a14 14 0 0 1 18 0M6.5 12.4a8.7 8.7 0 0 1 11 0M10 16a3.4 3.4 0 0 1 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></symbol>
+      <symbol id="battery" viewBox="0 0 28 20"><rect x="1.5" y="4" width="22" height="12" rx="3" fill="none" stroke="currentColor"/><path d="M25 8v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="4" y="6.5" width="16" height="7" rx="1.5" fill="currentColor"/></symbol>
+      <symbol id="controls" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="7" cy="7" r="2.2" fill="currentColor"/><rect x="2" y="13" width="20" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="17" cy="17" r="2.2" fill="currentColor"/></symbol>
+      <symbol id="compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8 4.8-2.2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+      <symbol id="sparkles" viewBox="0 0 24 24"><path d="M12 2c.6 5.3 3.2 8 8 9-4.8 1-7.4 3.7-8 9-.6-5.3-3.2-8-8-9 4.8-1 7.4-3.7 8-9Z" fill="currentColor"/><path d="M19 2c.2 2 1.1 3 3 3.5-1.9.5-2.8 1.5-3 3.5-.3-2-1.2-3-3-3.5 1.8-.5 2.7-1.5 3-3.5Z" fill="currentColor"/></symbol>
+      <symbol id="brush" viewBox="0 0 24 24"><path d="M14.8 4.2 20 9.4 9.4 20H4.2v-5.2L14.8 4.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m12.7 6.3 5.1 5.1M4.4 15.5l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+      <symbol id="code" viewBox="0 0 24 24"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="folder-symbol" viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10.5H3V6.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+      <symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor"/><rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor"/><rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor"/><rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor"/></symbol>
+      <symbol id="bluetooth" viewBox="0 0 24 24"><path d="m7 7 10 10-5 4V3l5 4L7 17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="airdrop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9.2 9.2 0 0 0 0 13M18.5 5.5a9.2 9.2 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+
+      <symbol id="app-finder" viewBox="0 0 64 64"><defs><linearGradient id="finder-bg" x2="0" y2="1"><stop stop-color="#e9f8ff"/><stop offset="1" stop-color="#75cafa"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#finder-bg)"/><path d="M32 4c-2 15-2 37 0 56-15 0-26-1-28-5V5c5-1 15-1 28-1Z" fill="#f6fbff"/><path d="M32 4c2 15 2 37 0 56 15 0 26-1 28-5V5c-5-1-15-1-28-1Z" fill="#2589df" opacity=".34"/><path d="M15 25v6M43 25v6" stroke="#294660" stroke-width="3" stroke-linecap="round"/><path d="M32 12c-1 12-5 19-4 27l6 3" fill="none" stroke="#36597a" stroke-width="2" stroke-linecap="round"/><path d="M17 45c8 6 19 7 29 0" fill="none" stroke="#294660" stroke-width="2.4" stroke-linecap="round"/></symbol>
+      <symbol id="app-launchpad" viewBox="0 0 64 64"><defs><linearGradient id="launch-bg" x2="0" y2="1"><stop stop-color="#f7f8fb"/><stop offset="1" stop-color="#c8cbd4"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#launch-bg)"/><g><rect x="12" y="12" width="11" height="11" rx="3" fill="#fa7069"/><rect x="27" y="12" width="11" height="11" rx="3" fill="#f5bd4f"/><rect x="42" y="12" width="11" height="11" rx="3" fill="#6fc978"/><rect x="12" y="27" width="11" height="11" rx="3" fill="#66b9ee"/><rect x="27" y="27" width="11" height="11" rx="3" fill="#9675db"/><rect x="42" y="27" width="11" height="11" rx="3" fill="#ed79a5"/><rect x="12" y="42" width="11" height="11" rx="3" fill="#60c9bb"/><rect x="27" y="42" width="11" height="11" rx="3" fill="#f49755"/><rect x="42" y="42" width="11" height="11" rx="3" fill="#778ce2"/></g></symbol>
+      <symbol id="app-safari" viewBox="0 0 64 64"><defs><linearGradient id="safari-bg" x2="0" y2="1"><stop stop-color="#32c5fb"/><stop offset="1" stop-color="#087be7"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="#f5f8fc"/><circle cx="32" cy="32" r="27" fill="url(#safari-bg)"/><g stroke="#fff" stroke-width="1" opacity=".8"><path d="M32 7v4M32 53v4M7 32h4M53 32h4M14.3 14.3l3 3M46.7 46.7l3 3M14.3 49.7l3-3M46.7 17.3l3-3"/></g><path d="m40 19-5 16-13 10 7-17 11-9Z" fill="#fff"/><path d="m40 19-5 16-6-6 11-10Z" fill="#fa4b54"/><circle cx="32" cy="32" r="2" fill="#e7edf7"/></symbol>
+      <symbol id="app-mail" viewBox="0 0 64 64"><defs><linearGradient id="mail-bg" x2="0" y2="1"><stop stop-color="#48c9ff"/><stop offset="1" stop-color="#1477ef"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#mail-bg)"/><rect x="10" y="17" width="44" height="31" rx="5" fill="#fff"/><path d="m12 20 20 16 20-16" fill="none" stroke="#2194ec" stroke-width="2.5" stroke-linejoin="round"/><path d="m11 45 14-13M53 45 39 32" stroke="#b2d8f6" stroke-width="2"/></symbol>
+      <symbol id="app-maps" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#f8f4de"/><path d="M0 45 27 31l37 9v24H0Z" fill="#9cd784"/><path d="m0 14 23 4 15 23-13 23H0Z" fill="#b5e4a0"/><path d="M45 0 29 64" stroke="#fff" stroke-width="11"/><path d="M0 44 64 25" stroke="#fff" stroke-width="8"/><path d="M0 44 64 25" stroke="#f5cf50" stroke-width="2"/><path d="M39 10c-6 0-10 4-10 10 0 8 10 16 10 16s10-8 10-16c0-6-4-10-10-10Z" fill="#ef5259"/><circle cx="39" cy="20" r="4" fill="#fff"/></symbol>
+      <symbol id="app-photos" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#f8f8fa"/><g transform="translate(32 32)"><ellipse cy="-13" rx="7" ry="14" fill="#f6c341"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(45)" fill="#ee8d37"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(90)" fill="#ed625c"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(135)" fill="#dc568d"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(180)" fill="#a867ba"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(225)" fill="#657fc6"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(270)" fill="#4fa9c8"/><ellipse cy="-13" rx="7" ry="14" transform="rotate(315)" fill="#72b97a"/></g></symbol>
+      <symbol id="app-messages" viewBox="0 0 64 64"><defs><linearGradient id="message-bg" x2="0" y2="1"><stop stop-color="#6bea6c"/><stop offset="1" stop-color="#16bb38"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#message-bg)"/><path d="M33 13c-13 0-23 8-23 18 0 6 4 11 10 14l-3 8 10-5c2 .4 4 .5 6 .5 13 0 23-8 23-18S46 13 33 13Z" fill="#fff"/></symbol>
+      <symbol id="app-music" viewBox="0 0 64 64"><defs><linearGradient id="music-bg" x2="0" y2="1"><stop stop-color="#fc6b89"/><stop offset="1" stop-color="#eb285d"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#music-bg)"/><path d="M27 44V20l24-5v23" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="20" cy="45" rx="8" ry="6" transform="rotate(-14 20 45)" fill="#fff"/><ellipse cx="44" cy="39" rx="8" ry="6" transform="rotate(-14 44 39)" fill="#fff"/></symbol>
+      <symbol id="app-calendar" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#fff"/><path d="M0 14C0 6 6 0 14 0h36c8 0 14 6 14 14H0Z" fill="#f4f4f5"/><text x="32" y="15" text-anchor="middle" fill="#ed4b4f" font-family="-apple-system,Arial" font-size="10" font-weight="600">MON</text><text x="32" y="49" text-anchor="middle" fill="#28272c" font-family="-apple-system,Arial" font-size="34" font-weight="300">16</text></symbol>
+      <symbol id="app-notes" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#fffdf4"/><path d="M0 14A14 14 0 0 1 14 0h36a14 14 0 0 1 14 14v4H0Z" fill="#f8ce45"/><path d="M10 28h44M10 39h44M10 50h44" stroke="#e7e1cb" stroke-width="1.5"/><path d="M12 9h40" stroke="#ad9133" stroke-width="2" stroke-dasharray="2 5"/></symbol>
+      <symbol id="app-store" viewBox="0 0 64 64"><defs><linearGradient id="store-bg" x2="0" y2="1"><stop stop-color="#35bffc"/><stop offset="1" stop-color="#1674ec"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#store-bg)"/><circle cx="32" cy="32" r="23" fill="none" stroke="#fff" stroke-width="3"/><g stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="m24 43 17-28M24 20l17 28M18 37h28M20 28h8M38 28h7"/></g></symbol>
+      <symbol id="app-settings" viewBox="0 0 64 64"><defs><linearGradient id="settings-bg" x2="0" y2="1"><stop stop-color="#e3e5eb"/><stop offset="1" stop-color="#8d939f"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#settings-bg)"/><g fill="#68707d"><path d="M29 7h6l2 7 6 2 6-3 4 5-5 5v7l5 5-4 5-6-3-6 2-2 7h-6l-2-7-6-2-6 3-4-5 5-5v-7l-5-5 4-5 6 3 6-2 2-7Z"/></g><circle cx="32" cy="32" r="16" fill="#d4d8df"/><circle cx="32" cy="32" r="11" fill="#727b89"/><circle cx="32" cy="32" r="6" fill="#c8ced7"/></symbol>
+      <symbol id="app-trash" viewBox="0 0 64 64"><defs><linearGradient id="trash-bg" x2="1" y2="0"><stop stop-color="#a7b4bd"/><stop offset=".5" stop-color="#eef4f6"/><stop offset="1" stop-color="#94a2ae"/></linearGradient></defs><path d="M16 17h32l-3 40H19l-3-40Z" fill="url(#trash-bg)"/><path d="M13 14h38v6H13zM25 8h14l3 6H22l3-6Z" fill="#c6d0d7"/><g stroke="#8998a3" stroke-width="2"><path d="m25 25 2 25M32 25v25M39 25l-2 25"/></g></symbol>
+      <symbol id="app-drive" viewBox="0 0 64 64"><defs><linearGradient id="drive-bg" x2="0" y2="1"><stop stop-color="#f7fafc"/><stop offset="1" stop-color="#aeb9c6"/></linearGradient></defs><rect x="5" y="8" width="54" height="40" rx="7" fill="url(#drive-bg)" stroke="#d9e2ea"/><rect x="5" y="34" width="54" height="14" rx="5" fill="#cad4dd"/><circle cx="51" cy="41" r="2" fill="#78ca82"/><path d="M14 50h36l4 5H10l4-5Z" fill="#8997a5"/></symbol>
+      <symbol id="app-folder" viewBox="0 0 64 64"><defs><linearGradient id="folder-bg" x2="0" y2="1"><stop stop-color="#82d5ff"/><stop offset="1" stop-color="#399ee9"/></linearGradient></defs><path d="M5 17a6 6 0 0 1 6-6h16l7 7h19a6 6 0 0 1 6 6v28a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6V17Z" fill="#56b9f2"/><path d="M5 25h54v27a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6V25Z" fill="url(#folder-bg)"/></symbol>
+      <symbol id="app-craft" viewBox="0 0 64 64"><defs><linearGradient id="craft-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ca9af3"/><stop offset=".48" stop-color="#8966e7"/><stop offset="1" stop-color="#5043b9"/></linearGradient><linearGradient id="craft-fold" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#ddceff"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#craft-bg)"/><path d="M17 44V25c0-8 6-13 15-13s15 5 15 13v20L32 53 17 44Z" fill="url(#craft-fold)"/><path d="m17 25 15 9 15-9M32 34v19" fill="none" stroke="#9a7ed5" stroke-width="2"/><path d="m17 25 15-13 15 13-15 9-15-9Z" fill="#fff" opacity=".9"/></symbol>
+      <symbol id="app-nova" viewBox="0 0 64 64"><defs><linearGradient id="nova-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#252443"/><stop offset="1" stop-color="#624e92"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#nova-bg)"/><circle cx="32" cy="32" r="18" fill="none" stroke="#ad8eed" stroke-width="2" opacity=".45"/><path d="M32 11c2 12 8 18 20 21-12 3-18 9-20 21-3-12-9-18-21-21 12-3 18-9 21-21Z" fill="#fff"/><circle cx="46" cy="15" r="4" fill="#f7b9e5"/></symbol>
+      <symbol id="app-code" viewBox="0 0 64 64"><defs><linearGradient id="code-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#303747"/><stop offset="1" stop-color="#11151e"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#code-bg)"/><path d="m24 20-12 12 12 12M40 20l12 12-12 12M36 14l-8 36" fill="none" stroke="#75dbfb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="app-pixel" viewBox="0 0 64 64"><defs><linearGradient id="pixel-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffb270"/><stop offset=".5" stop-color="#fa6c83"/><stop offset="1" stop-color="#c855a3"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#pixel-bg)"/><g transform="rotate(45 32 32)"><rect x="19" y="19" width="26" height="26" rx="5" fill="#fff"/><rect x="25" y="25" width="14" height="14" rx="3" fill="#f5a1ac"/></g></symbol>
+      <symbol id="app-palette" viewBox="0 0 64 64"><defs><linearGradient id="palette-bg" x2="0" y2="1"><stop stop-color="#fff3de"/><stop offset="1" stop-color="#f3c79f"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#palette-bg)"/><path d="M33 11c-13 0-22 9-22 21s9 21 20 21h5c4 0 6-5 3-8l-2-2c-2-3 0-7 4-7h5c5 0 8-4 7-9-2-10-10-16-20-16Z" fill="#fff"/><circle cx="19" cy="29" r="4" fill="#ef7b75"/><circle cx="25" cy="19" r="4" fill="#f5bb57"/><circle cx="37" cy="18" r="4" fill="#7fbf8c"/><circle cx="46" cy="25" r="4" fill="#788ed8"/></symbol>
+      <symbol id="app-terminal" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#282b35"/><path d="M0 15A15 15 0 0 1 15 0h34a15 15 0 0 1 15 15v3H0v-3Z" fill="#444854"/><circle cx="11" cy="9" r="2" fill="#fa665d"/><circle cx="18" cy="9" r="2" fill="#f8c44f"/><circle cx="25" cy="9" r="2" fill="#55c452"/><path d="m14 28 8 7-8 7M28 43h15" fill="none" stroke="#d6f6dc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="app-video" viewBox="0 0 64 64"><defs><linearGradient id="video-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6cc9ff"/><stop offset="1" stop-color="#7665de"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#video-bg)"/><rect x="10" y="17" width="32" height="30" rx="7" fill="#fff"/><path d="m43 27 12-7v24l-12-7V27Z" fill="#fff"/><path d="m27 25 10 7-10 7V25Z" fill="#8170db"/></symbol>
+      <symbol id="app-books" viewBox="0 0 64 64"><defs><linearGradient id="books-bg" x2="0" y2="1"><stop stop-color="#ffa85c"/><stop offset="1" stop-color="#f16c36"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#books-bg)"/><path d="M10 15c9-3 16-1 22 4v33c-6-5-13-7-22-4V15ZM54 15c-9-3-16-1-22 4v33c6-5 13-7 22-4V15Z" fill="#fff"/><path d="M32 20v31" stroke="#e9c7ae" stroke-width="2"/></symbol>
+      <symbol id="app-cloud" viewBox="0 0 64 64"><defs><linearGradient id="cloud-bg" x2="0" y2="1"><stop stop-color="#55c6fa"/><stop offset="1" stop-color="#4383e9"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#cloud-bg)"/><path d="M18 46c-7 0-11-4-11-10s5-10 11-10c1-9 7-14 15-14 10 0 16 7 16 15 7 0 10 4 10 9s-4 10-11 10H18Z" fill="#fff"/></symbol>
+    </defs>
+  </svg>
+
+  <main class="desktop" id="desktop">
+    <div class="wallpaper" aria-hidden="true"><div class="wallpaper-glow"></div><div class="wallpaper-noise"></div></div>
+
+    <header class="menu-bar">
+      <nav class="menu-left" aria-label="应用菜单">
+        <button class="menu-item apple-button" aria-label="Apple 菜单"><svg><use href="#apple"/></svg></button>
+        <button class="menu-item strong">App Store</button>
+        <button class="menu-item">文件</button>
+        <button class="menu-item">编辑</button>
+        <button class="menu-item desktop-only">显示</button>
+        <button class="menu-item desktop-only">前往</button>
+        <button class="menu-item desktop-only">窗口</button>
+        <button class="menu-item">帮助</button>
+      </nav>
+      <div class="menu-right">
+        <button class="menu-item desktop-only" aria-label="电池电量 80%"><svg class="status-icon battery"><use href="#battery"/></svg></button>
+        <button class="menu-item wifi-status" aria-label="Wi-Fi 已连接"><svg class="status-icon"><use href="#wifi"/></svg></button>
+        <button class="menu-item desktop-only" aria-label="聚焦搜索"><svg class="status-icon"><use href="#search"/></svg></button>
+        <button class="menu-item" id="control-toggle" aria-label="打开控制中心" aria-expanded="false"><svg class="status-icon"><use href="#controls"/></svg></button>
+        <button class="menu-item date-label" id="menu-date">11月16日 周一  14:30</button>
+      </div>
+    </header>
+
+    <section class="desktop-files" aria-label="桌面文件">
+      <button class="desktop-file"><svg><use href="#app-drive"/></svg><span>Macintosh HD</span></button>
+      <button class="desktop-file"><svg><use href="#app-folder"/></svg><span>灵感收集</span></button>
+    </section>
+
+    <aside class="widgets" aria-label="桌面小组件">
+      <div class="widget weather">
+        <span class="sun" aria-hidden="true"></span>
+        <div class="weather-city">杭州市</div>
+        <div class="weather-temp">24°</div>
+        <div class="weather-desc">晴间多云</div>
+        <div class="weather-desc">最高 26° · 最低 17°</div>
+      </div>
+      <div class="widget calendar">
+        <div class="calendar-date"><span id="widget-weekday">周一</span><strong id="widget-date">16</strong></div>
+        <div class="calendar-agenda"><strong>今天的日程</strong><div><i></i>15:00 设计评审</div><div style="margin-top:5px"><i></i>17:30 好友聚餐</div></div>
+      </div>
+    </aside>
+
+    <section class="app-window" id="app-window" aria-label="App Store 应用展示窗口">
+      <header class="titlebar">
+        <div class="traffic-lights" aria-label="窗口控制">
+          <button class="traffic close" id="window-close" aria-label="关闭窗口" title="关闭"></button>
+          <button class="traffic minimize" id="window-minimize" aria-label="最小化窗口" title="最小化"></button>
+          <button class="traffic maximize" id="window-maximize" aria-label="全屏窗口" title="全屏"></button>
+        </div>
+        <div class="window-title"><svg><use href="#app-store"/></svg>App Store</div>
+        <label class="search-box">
+          <svg><use href="#search"/></svg>
+          <input id="app-search" type="search" placeholder="搜索应用" autocomplete="off" aria-label="搜索应用">
+        </label>
+      </header>
+      <div class="window-body">
+        <aside class="sidebar">
+          <div class="sidebar-heading">探索</div>
+          <button class="side-item active" data-category="all"><svg><use href="#sparkles"/></svg>精选推荐</button>
+          <button class="side-item" data-category="design"><svg><use href="#brush"/></svg>创意设计</button>
+          <button class="side-item" data-category="develop"><svg><use href="#code"/></svg>开发工具</button>
+          <button class="side-item" data-category="life"><svg><use href="#compass"/></svg>效率生活</button>
+          <div class="sidebar-heading" style="margin-top:20px">资料库</div>
+          <button class="side-item" data-action="updates"><svg><use href="#grid"/></svg>更新</button>
+          <button class="side-item" data-action="purchased"><svg><use href="#folder-symbol"/></svg>已购项目</button>
+          <div class="sidebar-bottom">
+            <div class="storage"><div class="storage-label"><span>iCloud 云盘</span><span>63%</span></div><div class="storage-track"><span></span></div></div>
+            <div class="profile"><div class="avatar">AL</div><div><strong>Alex Lin</strong><span>Apple Account</span></div></div>
+          </div>
+        </aside>
+
+        <div class="showcase">
+          <div class="welcome"><div><div class="eyebrow">Curated for you</div><h1>下午好，Alex</h1></div><div class="welcome-meta" id="welcome-date">11月16日 星期一</div></div>
+          <section class="hero" aria-label="编辑推荐 Craft">
+            <div class="hero-copy"><div class="hero-tag">今日推荐</div><h2>让灵感，自然发生。</h2><p>Craft 将文字、图像与想法连接，<br>为每一次创作留出更多空间。</p><button class="hero-button" id="hero-open">打开 Craft</button></div>
+            <div class="hero-art"><svg class="app-svg"><use href="#app-craft"/></svg></div>
+            <span class="floating-chip chip-one">简洁 · 专注 · 协作</span><span class="floating-chip chip-two">Editors’ Choice</span>
+          </section>
+          <div class="section-row"><h3 id="section-title">精选应用</h3><button id="show-all">查看全部</button></div>
+          <div class="app-grid" id="app-grid">
+            <button class="app-card" data-name="Nova" data-category="design"><svg class="app-svg"><use href="#app-nova"/></svg><strong>Nova</strong><small>灵感与创作</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Code Studio" data-category="develop"><svg class="app-svg"><use href="#app-code"/></svg><strong>Code Studio</strong><small>开发者工具</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Pixel" data-category="design"><svg class="app-svg"><use href="#app-pixel"/></svg><strong>Pixel</strong><small>图像处理</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Palette" data-category="design"><svg class="app-svg"><use href="#app-palette"/></svg><strong>Palette</strong><small>色彩与设计</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Terminal" data-category="develop"><svg class="app-svg"><use href="#app-terminal"/></svg><strong>Terminal</strong><small>效率工具</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Screen Studio" data-category="design"><svg class="app-svg"><use href="#app-video"/></svg><strong>Screen Studio</strong><small>录制与创作</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Books" data-category="life"><svg class="app-svg"><use href="#app-books"/></svg><strong>Books</strong><small>阅读与生活</small><span class="get-button">获取</span></button>
+            <button class="app-card" data-name="Cloud Drive" data-category="life"><svg class="app-svg"><use href="#app-cloud"/></svg><strong>Cloud Drive</strong><small>云端效率</small><span class="get-button">获取</span></button>
+          </div>
+          <div class="empty-state" id="empty-state">没有找到匹配的应用，试试其他关键词。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="launchpad" id="launchpad" aria-label="启动台" aria-hidden="true">
+      <label class="launchpad-search"><svg><use href="#search"/></svg><input id="launch-search" type="search" placeholder="搜索" aria-label="在启动台搜索应用"></label>
+      <div class="launchpad-grid" id="launchpad-grid">
+        <button class="launch-app" data-app="Safari"><svg class="app-svg"><use href="#app-safari"/></svg><span>Safari</span></button>
+        <button class="launch-app" data-app="邮件"><svg class="app-svg"><use href="#app-mail"/></svg><span>邮件</span></button>
+        <button class="launch-app" data-app="地图"><svg class="app-svg"><use href="#app-maps"/></svg><span>地图</span></button>
+        <button class="launch-app" data-app="照片"><svg class="app-svg"><use href="#app-photos"/></svg><span>照片</span></button>
+        <button class="launch-app" data-app="信息"><svg class="app-svg"><use href="#app-messages"/></svg><span>信息</span></button>
+        <button class="launch-app" data-app="音乐"><svg class="app-svg"><use href="#app-music"/></svg><span>音乐</span></button>
+        <button class="launch-app" data-app="Nova"><svg class="app-svg"><use href="#app-nova"/></svg><span>Nova</span></button>
+        <button class="launch-app" data-app="Code Studio"><svg class="app-svg"><use href="#app-code"/></svg><span>Code Studio</span></button>
+        <button class="launch-app" data-app="Pixel"><svg class="app-svg"><use href="#app-pixel"/></svg><span>Pixel</span></button>
+        <button class="launch-app" data-app="Palette"><svg class="app-svg"><use href="#app-palette"/></svg><span>Palette</span></button>
+        <button class="launch-app" data-app="日历"><svg class="app-svg"><use href="#app-calendar"/></svg><span>日历</span></button>
+        <button class="launch-app" data-app="备忘录"><svg class="app-svg"><use href="#app-notes"/></svg><span>备忘录</span></button>
+      </div>
+    </section>
+
+    <section class="control-center" id="control-center" aria-label="控制中心" aria-hidden="true">
+      <div class="control-grid">
+        <div class="control-card connectivity">
+          <div class="connection"><span class="connection-icon"><svg><use href="#wifi"/></svg></span><div><strong>Wi-Fi</strong><small>Home_5G</small></div></div>
+          <div class="connection"><span class="connection-icon"><svg><use href="#bluetooth"/></svg></span><div><strong>蓝牙</strong><small>已开启</small></div></div>
+          <div class="connection"><span class="connection-icon"><svg><use href="#airdrop"/></svg></span><div><strong>隔空投送</strong><small>仅限联系人</small></div></div>
+        </div>
+        <div class="control-card focus"><span class="moon">☾</span><strong>专注模式</strong></div>
+        <div class="control-card"><span class="slider-label">显示器</span><input type="range" min="20" max="100" value="82" aria-label="显示器亮度"></div>
+        <div class="control-card" style="grid-column:1/-1"><span class="slider-label">声音</span><input type="range" min="0" max="100" value="64" aria-label="音量"></div>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="dock-wrap">
+      <nav class="dock" id="dock" aria-label="程序坞">
+        <button class="dock-item running" data-app="访达" aria-label="访达"><svg class="dock-icon"><use href="#app-finder"/></svg><span class="tooltip">访达</span></button>
+        <button class="dock-item" data-app="启动台" id="dock-launchpad" aria-label="启动台"><svg class="dock-icon"><use href="#app-launchpad"/></svg><span class="tooltip">启动台</span></button>
+        <button class="dock-item hide-small" data-app="Safari" aria-label="Safari"><svg class="dock-icon"><use href="#app-safari"/></svg><span class="tooltip">Safari</span></button>
+        <button class="dock-item hide-medium" data-app="邮件" aria-label="邮件"><svg class="dock-icon"><use href="#app-mail"/></svg><span class="tooltip">邮件</span></button>
+        <button class="dock-item hide-small" data-app="地图" aria-label="地图"><svg class="dock-icon"><use href="#app-maps"/></svg><span class="tooltip">地图</span></button>
+        <button class="dock-item hide-medium" data-app="照片" aria-label="照片"><svg class="dock-icon"><use href="#app-photos"/></svg><span class="tooltip">照片</span></button>
+        <button class="dock-item hide-small" data-app="信息" aria-label="信息"><svg class="dock-icon"><use href="#app-messages"/></svg><span class="tooltip">信息</span></button>
+        <button class="dock-item hide-medium" data-app="音乐" aria-label="音乐"><svg class="dock-icon"><use href="#app-music"/></svg><span class="tooltip">音乐</span></button>
+        <button class="dock-item hide-medium" data-app="日历" aria-label="日历"><svg class="dock-icon"><use href="#app-calendar"/></svg><span class="tooltip">日历</span></button>
+        <button class="dock-item hide-small" data-app="备忘录" aria-label="备忘录"><svg class="dock-icon"><use href="#app-notes"/></svg><span class="tooltip">备忘录</span></button>
+        <button class="dock-item running" data-app="App Store" id="dock-store" aria-label="App Store"><svg class="dock-icon"><use href="#app-store"/></svg><span class="tooltip">App Store</span></button>
+        <button class="dock-item hide-small" data-app="系统设置" aria-label="系统设置"><svg class="dock-icon"><use href="#app-settings"/></svg><span class="tooltip">系统设置</span></button>
+        <span class="dock-separator" aria-hidden="true"></span>
+        <button class="dock-item" data-app="废纸篓" aria-label="废纸篓"><svg class="dock-icon"><use href="#app-trash"/></svg><span class="tooltip">废纸篓</span></button>
+      </nav>
+    </div>
+  </main>
+
+  <script>
+    const desktop = document.getElementById('desktop');
+    const appWindow = document.getElementById('app-window');
+    const launchpad = document.getElementById('launchpad');
+    const controlCenter = document.getElementById('control-center');
+    const controlToggle = document.getElementById('control-toggle');
+    const toast = document.getElementById('toast');
+    let toastTimer;
+
+    function showToast(message) {
+      clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add('show');
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1900);
+    }
+
+    function updateDate() {
+      const now = new Date();
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const longWeekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const hour = now.getHours();
+      const greeting = hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
+      document.getElementById('menu-date').textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${weekdays[now.getDay()]}  ${String(hour).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      document.getElementById('widget-weekday').textContent = weekdays[now.getDay()];
+      document.getElementById('widget-date').textContent = now.getDate();
+      document.getElementById('welcome-date').textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${longWeekdays[now.getDay()]}`;
+      document.querySelector('.welcome h1').textContent = `${greeting}，Alex`;
+    }
+    updateDate();
+    setInterval(updateDate, 30000);
+
+    function openStore() {
+      closeLaunchpad();
+      appWindow.classList.remove('hidden', 'closing', 'minimizing');
+      document.getElementById('dock-store').classList.add('running');
+    }
+
+    function closeStore(mode) {
+      appWindow.classList.add(mode);
+      setTimeout(() => {
+        appWindow.classList.add('hidden');
+        appWindow.classList.remove(mode);
+        if (mode === 'closing') document.getElementById('dock-store').classList.remove('running');
+      }, 280);
+    }
+
+    document.getElementById('window-close').addEventListener('click', () => closeStore('closing'));
+    document.getElementById('window-minimize').addEventListener('click', () => closeStore('minimizing'));
+    document.getElementById('window-maximize').addEventListener('click', () => appWindow.classList.toggle('maximized'));
+    document.getElementById('dock-store').addEventListener('click', openStore);
+
+    function toggleLaunchpad(force) {
+      const open = typeof force === 'boolean' ? force : !launchpad.classList.contains('open');
+      launchpad.classList.toggle('open', open);
+      launchpad.setAttribute('aria-hidden', String(!open));
+      document.getElementById('dock-launchpad').classList.toggle('running', open);
+      if (open) setTimeout(() => document.getElementById('launch-search').focus(), 250);
+      else {
+        document.getElementById('launch-search').value = '';
+        filterLaunchpad('');
+      }
+    }
+    function closeLaunchpad() { toggleLaunchpad(false); }
+
+    function filterLaunchpad(query) {
+      const keyword = query.trim().toLowerCase();
+      document.querySelectorAll('.launch-app').forEach(app => {
+        app.style.display = app.dataset.app.toLowerCase().includes(keyword) ? '' : 'none';
+      });
+    }
+
+    document.getElementById('dock-launchpad').addEventListener('click', event => {
+      event.stopPropagation();
+      toggleLaunchpad();
+    });
+    document.getElementById('launch-search').addEventListener('input', event => filterLaunchpad(event.target.value));
+    document.querySelectorAll('.launch-app').forEach(app => app.addEventListener('click', () => {
+      closeLaunchpad();
+      showToast(`${app.dataset.app} · 演示应用`);
+    }));
+
+    const dock = document.getElementById('dock');
+    const dockItems = [...dock.querySelectorAll('.dock-item')];
+    dock.addEventListener('pointermove', event => {
+      dockItems.forEach(item => {
+        if (getComputedStyle(item).display === 'none') return;
+        const rect = item.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        const distance = Math.abs(event.clientX - center);
+        const influence = Math.max(0, 1 - distance / 120);
+        item.style.setProperty('--scale', (1 + influence * .48).toFixed(3));
+      });
+    });
+    dock.addEventListener('pointerleave', () => dockItems.forEach(item => item.style.setProperty('--scale', 1)));
+
+    document.querySelectorAll('.dock-item[data-app]').forEach(item => {
+      if (['启动台', 'App Store'].includes(item.dataset.app)) return;
+      item.addEventListener('click', () => showToast(`${item.dataset.app} · 演示应用`));
+    });
+    document.querySelectorAll('.desktop-file').forEach(item => item.addEventListener('dblclick', () => showToast('这是一个桌面样式演示')));
+    document.querySelectorAll('.app-card').forEach(card => card.addEventListener('click', () => showToast(`${card.dataset.name} · 已添加到资源库`)));
+    document.getElementById('hero-open').addEventListener('click', () => showToast('Craft · 开始你的下一次创作'));
+
+    const appSearch = document.getElementById('app-search');
+    const categoryButtons = [...document.querySelectorAll('.side-item[data-category]')];
+    let activeCategory = 'all';
+
+    function filterApps() {
+      const keyword = appSearch.value.trim().toLowerCase();
+      let visible = 0;
+      document.querySelectorAll('.app-card').forEach(card => {
+        const matchesSearch = card.dataset.name.toLowerCase().includes(keyword);
+        const matchesCategory = activeCategory === 'all' || card.dataset.category === activeCategory;
+        const show = matchesSearch && matchesCategory;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      document.getElementById('empty-state').classList.toggle('visible', visible === 0);
+    }
+
+    categoryButtons.forEach(button => button.addEventListener('click', () => {
+      activeCategory = button.dataset.category;
+      categoryButtons.forEach(item => item.classList.toggle('active', item === button));
+      document.getElementById('section-title').textContent = button.textContent.trim();
+      filterApps();
+    }));
+    appSearch.addEventListener('input', filterApps);
+    document.getElementById('show-all').addEventListener('click', () => categoryButtons[0].click());
+    document.querySelectorAll('[data-action="updates"]').forEach(button => button.addEventListener('click', () => showToast('所有应用均为最新版本')));
+    document.querySelectorAll('[data-action="purchased"]').forEach(button => button.addEventListener('click', () => showToast('已购项目 · 8 个应用')));
+
+    function toggleControlCenter(force) {
+      const open = typeof force === 'boolean' ? force : !controlCenter.classList.contains('open');
+      controlCenter.classList.toggle('open', open);
+      controlCenter.setAttribute('aria-hidden', String(!open));
+      controlToggle.setAttribute('aria-expanded', String(open));
+      controlToggle.classList.toggle('active', open);
+    }
+    controlToggle.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleControlCenter();
+    });
+    controlCenter.addEventListener('click', event => event.stopPropagation());
+    desktop.addEventListener('click', event => {
+      if (!event.target.closest('.dock-item')) closeLaunchpad();
+      toggleControlCenter(false);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        closeLaunchpad();
+        toggleControlCenter(false);
+        appWindow.classList.remove('maximized');
+        document.activeElement.blur();
+      }
+    });
+  </script>
+</body>
+</html>
