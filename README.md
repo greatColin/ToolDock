@@ -24,14 +24,16 @@ D:/python/envs/py310/python.exe main.py        # Whole platform: http://127.0.0.
 ```
 
 ```bash
-# Run/debug a single module (mounted with the same prefix as the platform, so the same path assumptions hold)
+# Run/debug one module with the self-test console (same module prefix/path assumptions as the platform)
 D:/python/envs/py310/python.exe run_module.py demo_notes [--port 9900]
+# Open http://127.0.0.1:9900/ for the console; module remains at /demo_notes/
 ```
 
 ## Features
 
 - **Unified lifecycle**: `init`/`shutdown` events dispatched by the hub; state machine STOPPED/STARTING/RUNNING/ERROR; buttons mutually disabled during STARTING; ERROR offers retry; Ctrl+C shuts down gracefully in reverse order.
 - **Custom plugins**: a module = FastAPI app + two async events; single-port prefix routing (`/<name>/…`, WebSocket passed through natively); pages fully customizable (`/card` compact view optional); a module that fails to load never takes down the host.
+- **Single-module self-test console**: `run_module.py <name>` starts only the selected module plus a local console for endpoint discovery/calls, HTML page preview/source inspection, lifecycle control and an idempotency check; it uses the same `/<name>/` prefix as the platform.
 - **Free composition**: 24-column free grid (50px cells, cards drag to anchor / resize; span 4×4–24×16); components can be duplicated and mixed across tabs (function and control components together); the composition is persisted as a SQLite template.
 - **Control components**: available as soon as a module is initialized, rendered by the host with zero module effort; remote control only, no keep-alive (remoting from the "Module Control" tab does not auto-start modules; clearing the function references stops them).
 - **Desktop dashboard**: tab = App (initial badge, double-click or Dock click to open a window, red light to close); the macOS shell = top menu bar + desktop widgets (clock / running overview / shortcuts) + bottom Dock; the Dock edit switch toggles edit/browse modes (prevents mis-taps); the component library is docked on the right and grouped by module (control row + function row); the settings panel switches wallpaper, glass intensity, widget visibility and motion (stored in the browser).

@@ -6,9 +6,10 @@
 ## 结构
 
 ```
-run_module.py      # python run_module.py <名字> [--port 9900]：单模块独立运行
+run_module.py      # python run_module.py <名字> [--port 9900]：单模块自测（控制台 / + 模块 /<名字>/）
 main.py            # 宿主=唯一 server（单端口 8500）：发现 plugins/<名字>/module.py → 按 /<名字>/ 挂载 → 同端口仪表盘 /；html/css/js 一律 Cache-Control: no-cache
 tooldock/registry.py # 注册表：发现/去重/状态机/config 生命周期
+tooldock/selftest.py + tooldock/selftest_ui/  # 单模块自测：接口发现/调用、页面自动获取、生命周期与契约自检、控制台界面
 plugins/<名字>/    # 一个模块一个目录，挂载前缀 = 目录名
 tooldock.db            # SQLite 模板库（自动生成，gitignore）：tabs(name, idx) + placements(id, tab_id, module, col, row, span_w, span_h)；每次布局编辑即整体落库，启动按当前模板初始化；首次启动如存在旧 config.json 自动迁移后删除，两者不可并存
 ```
@@ -46,9 +47,12 @@ async def shutdown()   # 幂等，必须能清理半途 init 失败的残留
 4. 文档随代码同改：契约变化必须同步本文件的对应段落，且段落不得冗长。
 5. 单一来源：同一约定只在一处完整描述，其他位置引用之。
 
-## 独立运行
+## 单模块自测（共享 runner）
 
-- 共享 runner `run_module.py <名字> [--port 9900]`：设为前缀 mount（与平台一致，暴露相同路径假设）、Ctrl+C 复用宿主 shutdown、init 失败须自兜底退出。模块代码零改动，禁止各模块自写 main。
+- `run_module.py <名字> [--port 9900]` 只启动指定模块，并在 `/` 提供自测控制台；模块仍挂在 `/<名字>/`，与平台一致，保留相同路径假设。Ctrl+C 调用模块 shutdown；模块代码零改动，禁止各模块自写 main。
+- 控制台提供三项：基于 OpenAPI/路由发现的接口列表与调用、自动发现并预览模块 HTML、init/shutdown 控制与幂等自检。页面发现优先使用同名路由，`index.html → /`、`card.html → /card`，其余 HTML 文件按文件名推导路由；同时可列出可用 GET HTML 页面。
+- 前端接口调用经当前 ASGI 应用的真实 `/<名字>/…` mount 链路；绝对前缀 URL 亦可直接访问。自测控制台专用于本机开发，非鉴权服务，不应暴露到不可信网络。
+- 幂等自检会真实调用 `init()` 两次再 `shutdown()` 两次，可能清空/重置模块数据或产生外部副作用；应在可丢弃的开发数据上使用。
 
 ## 仪表盘（Mac 桌面范式）
 
